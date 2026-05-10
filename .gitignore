@@ -1,0 +1,10 @@
+# Walkthrough outputs (generated, not committed)
+outputs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
