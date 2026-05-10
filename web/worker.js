@@ -10,6 +10,7 @@ const { WalkthroughChecker } = require('./checker');
 const { createPlaywrightTools } = require('./tools');
 const { supabaseAdmin } = require('./supabase');
 const { jobEmitter } = require('./emitter');
+const { getPersonaDoc } = require('./config-writer');
 
 function createWorker(projectRoot) {
   let queue;
@@ -41,6 +42,115 @@ function createWorker(projectRoot) {
   return { enqueue, abort };
 }
 
+async function runPersonaStations({
+  personaName, jobId, browser, stations,
+  fullSystemPrompt, personaDoc, job, userGoal, signal, model,
+}) {
+  const { tools, newContext, closeContext } = createPlaywrightTools(
+    browser,
+    jobId,
+    supabaseAdmin,
+    jobEmitter,
+    personaName
+  );
+
+  const checker = new WalkthroughChecker(stations);
+
+  for (const station of stations) {
+    if (checker.shouldHalt()) break;
+    if (signal.aborted) throw new Error('手动中断');
+
+    checker.setCurrent(station.id);
+
+    jobEmitter.emit(`job:${jobId}`, {
+      type: 'station-change',
+      personaId: personaName,
+      stationId: station.id,
+      stationName: station.name,
+    });
+
+    await newContext();
+
+    let retryCount = 0;
+    let stationDone = false;
+
+    while (retryCount <= 2 && !stationDone) {
+      try {
+        const stationPrompt = buildStationPrompt(station, personaDoc, job, userGoal);
+
+        const result = streamText({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: fullSystemPrompt,
+              providerOptions: {
+                anthropic: { cacheControl: { type: 'ephemeral' } },
+              },
+            },
+            {
+              role: 'user',
+              content: stationPrompt,
+            },
+          ],
+          tools,
+          stopWhen: stepCountIs(50),
+          maxTokens: 4096,
+          abortSignal: signal,
+        });
+
+        // Consume the stream and emit events
+        for await (const chunk of result.fullStream) {
+          if (chunk.type === 'text-delta' && chunk.textDelta) {
+            jobEmitter.emit(`job:${jobId}`, { type: 'cot', personaId: personaName, delta: chunk.textDelta });
+          } else if (chunk.type === 'tool-call') {
+            jobEmitter.emit(`job:${jobId}`, {
+              type: 'tool-call',
+              personaId: personaName,
+              toolName: chunk.toolName,
+              args: chunk.args,
+            });
+          }
+        }
+
+        // Token usage + cache metrics
+        const usage = await result.usage;
+        const providerMeta = await result.providerMetadata;
+        const cacheMeta = providerMeta?.anthropic;
+        console.log(`[${jobId}][${personaName}] Station ${station.id} tokens:`, {
+          input: usage?.promptTokens,
+          output: usage?.completionTokens,
+          cacheCreation: cacheMeta?.cacheCreationInputTokens || 0,
+          cacheRead: cacheMeta?.cacheReadInputTokens || 0,
+        });
+
+        checker.recordComplete(station.id);
+        stationDone = true;
+      } catch (err) {
+        console.error(`[${personaName}] Station ${station.id} error (attempt ${retryCount + 1}):`, err.message);
+        const classification = checker.recordError(station.id, err);
+        if (classification.shouldRetry) {
+          retryCount++;
+          await closeContext();
+          await newContext();
+        } else {
+          break;
+        }
+      }
+    }
+
+    await closeContext();
+
+    // Update per-persona progress after each station
+    const currentJob = await getJob(jobId);
+    const progress = currentJob.progress || { personas: {} };
+    progress.personas[personaName] = checker.toProgress();
+    await updateJob(jobId, { progress });
+  }
+
+  return checker;
+}
+
 async function runJob(jobId, projectRoot, abortControllers) {
   const ac = new AbortController();
   abortControllers.set(jobId, ac);
@@ -55,7 +165,6 @@ async function runJob(jobId, projectRoot, abortControllers) {
       path.join(instanceDir, 'system_instructions.md'),
       'utf8'
     );
-    const personasDoc = fs.readFileSync(path.join(instanceDir, 'personas.md'), 'utf8');
     const taskCardDoc = fs.readFileSync(path.join(instanceDir, 'task_card.md'), 'utf8');
     const configDoc = fs.readFileSync(path.join(instanceDir, 'config.md'), 'utf8');
     const stations = parseTaskCard(taskCardDoc);
@@ -66,10 +175,13 @@ async function runJob(jobId, projectRoot, abortControllers) {
     const userGoalMatch = configDoc.match(/## 用户任务目标（最高优先级）\n(.+)/);
     const userGoal = userGoalMatch ? userGoalMatch[1].trim() : '';
 
+    const issueSchema = fs.readFileSync(
+      path.join(projectRoot, 'schema', 'issue_schema.md'),
+      'utf8'
+    );
+
     // System prompt: static across all stations for KV cache reuse
-    // issue_schema.md removed — severity/classification defs already in
-    // system_instructions.md (Chinese) and Zod .describe() annotations
-    let fullSystemPrompt = systemPrompt;
+    let fullSystemPrompt = systemPrompt + '\n\n' + issueSchema;
     if (job.plan?.user_prompt) {
       fullSystemPrompt += `\n\n## 用户补充指令\n${job.plan.user_prompt}`;
     }
@@ -80,107 +192,41 @@ async function runJob(jobId, projectRoot, abortControllers) {
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
 
-    const { tools, newContext, closeContext } = createPlaywrightTools(
-      browser,
-      jobId,
-      supabaseAdmin,
-      jobEmitter
-    );
+    const personas = job.personas;
 
-    const checker = new WalkthroughChecker(stations);
-
-    // Per-station execution loop
-    for (const station of stations) {
-      if (checker.shouldHalt()) break;
-      if (signal.aborted) throw new Error('手动中断');
-
-      checker.setCurrent(station.id);
-      await updateJob(jobId, { progress: checker.toProgress() });
-
-      jobEmitter.emit(`job:${jobId}`, {
-        type: 'station-change',
-        stationId: station.id,
-        stationName: station.name,
+    // Launch all personas in parallel
+    const personaPromises = personas.map((personaName) => {
+      const personaDoc = getPersonaDoc(projectRoot, jobId, personaName);
+      return runPersonaStations({
+        personaName, jobId, browser, stations,
+        fullSystemPrompt, personaDoc, job, userGoal, signal, model,
       });
+    });
 
-      await newContext();
+    const results = await Promise.allSettled(personaPromises);
 
-      let retryCount = 0;
-      let stationDone = false;
+    // Emit synthesis start
+    jobEmitter.emit(`job:${jobId}`, { type: 'synthesis-start' });
 
-      while (retryCount <= 2 && !stationDone) {
-        try {
-          const stationPrompt = buildStationPrompt(station, personasDoc, job, userGoal);
-
-          const result = streamText({
-            model,
-            messages: [
-              {
-                role: 'system',
-                content: fullSystemPrompt,
-                providerOptions: {
-                  anthropic: { cacheControl: { type: 'ephemeral' } },
-                },
-              },
-              {
-                role: 'user',
-                content: stationPrompt,
-              },
-            ],
-            tools,
-            stopWhen: stepCountIs(50),
-            maxTokens: 4096,
-            abortSignal: signal,
-          });
-
-          // Consume the stream and emit events
-          for await (const chunk of result.fullStream) {
-            if (chunk.type === 'text-delta' && chunk.textDelta) {
-              jobEmitter.emit(`job:${jobId}`, { type: 'cot', delta: chunk.textDelta });
-            } else if (chunk.type === 'tool-call') {
-              jobEmitter.emit(`job:${jobId}`, {
-                type: 'tool-call',
-                toolName: chunk.toolName,
-                args: chunk.args,
-              });
-            }
-          }
-
-          // Token usage + cache metrics
-          const usage = await result.usage;
-          const providerMeta = await result.providerMetadata;
-          const cacheMeta = providerMeta?.anthropic;
-          console.log(`[${jobId}] Station ${station.id} tokens:`, {
-            input: usage?.promptTokens,
-            output: usage?.completionTokens,
-            cacheCreation: cacheMeta?.cacheCreationInputTokens || 0,
-            cacheRead: cacheMeta?.cacheReadInputTokens || 0,
-          });
-
-          checker.recordComplete(station.id);
-          stationDone = true;
-        } catch (err) {
-          console.error(`Station ${station.id} error (attempt ${retryCount + 1}):`, err.message);
-          const classification = checker.recordError(station.id, err);
-          if (classification.shouldRetry) {
-            retryCount++;
-            await closeContext();
-            await newContext();
-          } else {
-            break;
-          }
-        }
-      }
-
-      await closeContext();
-      await updateJob(jobId, { progress: checker.toProgress() });
-    }
+    // Run synthesis pipeline
+    const { synthesizeFindings } = require('./synthesizer');
+    await synthesizeFindings(jobId, job);
 
     // Generate report
     await generateReport(jobId, projectRoot);
 
-    // Final status
-    const finalStatus = checker.finalStatus();
+    // Aggregate final status across all persona checkers
+    const allCheckers = results
+      .filter((r) => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    const totalCompleted = allCheckers.reduce((sum, c) => sum + c.completed.size, 0);
+    const totalStations = stations.length * personas.length;
+    let finalStatus;
+    if (totalCompleted === 0) finalStatus = 'failed';
+    else if (totalCompleted === totalStations) finalStatus = 'done';
+    else finalStatus = 'partial';
+
     const reportUrl = `/reports/${jobId}`;
     await updateJob(jobId, {
       status: finalStatus,
@@ -273,45 +319,6 @@ function parsePersonaTable(markdown) {
   return map;
 }
 
-// Filter personas markdown to only include named personas (by first name)
-function filterPersonas(raw, selectedFirstNames) {
-  if (!selectedFirstNames || selectedFirstNames.length === 0) return raw;
-
-  const lines = raw.split('\n');
-  let headerEnd = 0;
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith('### ')) {
-      headerEnd = i;
-      break;
-    }
-  }
-  const header = lines.slice(0, headerEnd).join('\n');
-
-  const sections = [];
-  let current = null;
-  for (let i = headerEnd; i < lines.length; i++) {
-    if (lines[i].startsWith('### ')) {
-      if (current !== null) sections.push(current);
-      current = [lines[i]];
-    } else if (current !== null) {
-      current.push(lines[i]);
-    }
-  }
-  if (current !== null) sections.push(current);
-
-  const wanted = selectedFirstNames.map((n) => n.toLowerCase());
-  const kept = sections.filter((sec) => {
-    const firstName = sec[0].replace(/^###\s+/, '').split(/\s+/)[0].toLowerCase();
-    return wanted.includes(firstName);
-  });
-
-  const parts = [header];
-  if (kept.length > 0) {
-    parts.push(kept.map((s) => s.join('\n')).join('\n\n'));
-  }
-  return parts.join('\n') + '\n';
-}
-
 // Station-type evaluation guidance (progressive disclosure in user prompt)
 function getStationTypeGuidance(station) {
   const id = parseInt(station.id.replace('S', ''), 10);
@@ -323,16 +330,11 @@ function getStationTypeGuidance(station) {
   return '## 评估重点: 供应商\n关注认证信息、工厂能力、信任建立';
 }
 
-// Build per-station prompt
+// Build per-station prompt (personasDoc now contains only a single persona's doc)
 function buildStationPrompt(station, personasDoc, job, userGoal) {
   const goalSection = userGoal && userGoal !== '(未填写)'
     ? `\n## 用户任务目标（最高优先级）\n${userGoal}\n\n所有站点的操作和评估都应围绕此目标展开。评估每个界面是否帮助用户高效达成此目标。\n`
     : '';
-
-  // Filter personas to only those assigned to this station
-  const stationPersonas = station.personas.length > 0
-    ? filterPersonas(personasDoc, station.personas)
-    : personasDoc;
 
   const typeGuidance = getStationTypeGuidance(station);
 
@@ -354,111 +356,316 @@ Follow the operation steps below for this station. For each step:
 ${station.content}
 
 ## Personas for This Walkthrough
-${stationPersonas}
+${personasDoc}
 
 ## Important Rules
 - Take screenshots at every step documented in the station instructions
 - Use the recordIssue tool for EVERY issue you discover — do not just describe issues in text
 - Issue IDs must follow the format P-${station.id}-XX (e.g., P-${station.id}-01)
-- Evaluate from ALL personas listed above
+- Evaluate from the persona's perspective
 - Be thorough: check visual hierarchy, information architecture, interaction patterns, and accessibility
 - Write issue descriptions in first person from the affected persona's perspective`;
 }
 
-// Generate HTML report from findings
+// Generate HTML report from merged findings + raw findings
 async function generateReport(jobId, projectRoot) {
-  const { data: findings } = await supabaseAdmin
-    .from('findings')
-    .select('*')
-    .eq('job_id', jobId)
-    .order('created_at', { ascending: true });
+  // Fetch merged findings (post-synthesis) and raw findings (per-persona evidence)
+  const [mergedResult, rawResult] = await Promise.all([
+    supabaseAdmin.from('merged_findings').select('*').eq('job_id', jobId).order('created_at', { ascending: true }),
+    supabaseAdmin.from('findings').select('*').eq('job_id', jobId).order('created_at', { ascending: true }),
+  ]);
 
-  if (!findings || findings.length === 0) return;
+  const merged = mergedResult.data || [];
+  const raw = rawResult.data || [];
+
+  if (merged.length === 0 && raw.length === 0) return;
 
   const job = await getJob(jobId);
+  const plan = job.plan || {};
+  const summary = plan.summary || '';
+  const journeyInsights = plan.journey_insights || [];
+  const synthesisWarnings = plan.synthesis_warnings || [];
 
-  // Group findings by station
-  const byStation = {};
-  for (const f of findings) {
-    if (!byStation[f.station]) byStation[f.station] = [];
-    byStation[f.station].push(f);
-  }
+  // Use merged if available, fall back to raw
+  const hasMerged = merged.length > 0;
+  const primaryFindings = hasMerged ? merged : raw;
+
+  // Build raw findings lookup by ID for per-persona drill-down
+  const rawById = {};
+  for (const f of raw) rawById[f.id] = f;
+
+  // Sort merged by severity priority
+  const sevOrder = { P0: 0, P1: 1, P2: 2, P3: 3 };
+  const sorted = [...primaryFindings].sort((a, b) => (sevOrder[a.severity] || 9) - (sevOrder[b.severity] || 9));
 
   const severityColor = { P0: '#dc2626', P1: '#ea580c', P2: '#ca8a04', P3: '#65a30d' };
+  const sevCounts = { P0: 0, P1: 0, P2: 0, P3: 0 };
+  for (const f of sorted) sevCounts[f.severity] = (sevCounts[f.severity] || 0) + 1;
+
+  const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   let html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UX Walkthrough Report — ${job.url}</title>
+  <title>UX Walkthrough Report — ${escHtml(job.url)}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 960px; margin: 0 auto; padding: 2rem; }
-    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
-    .meta { color: #666; margin-bottom: 2rem; font-size: 0.875rem; }
-    .summary { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
-    .stat { background: #f5f5f5; padding: 1rem; border-radius: 8px; min-width: 120px; text-align: center; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 960px; margin: 0 auto; padding: 2rem; background: #fafafa; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .meta { color: #666; margin-bottom: 1.5rem; font-size: 0.875rem; }
+    .exec-summary { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+    .exec-summary h2 { font-size: 1rem; margin-bottom: 0.5rem; color: #333; }
+    .exec-summary p { font-size: 0.9rem; color: #444; }
+    .journey-insights { background: #f0f7ff; border: 1px solid #bdd7f1; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+    .journey-insights h2 { font-size: 1rem; margin-bottom: 0.5rem; color: #1a5276; }
+    .journey-insights ul { margin: 0; padding-left: 1.25rem; }
+    .journey-insights li { font-size: 0.875rem; color: #2c3e50; margin-bottom: 0.25rem; }
+    .stats { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .stat { background: #fff; border: 1px solid #e5e5e5; padding: 0.75rem 1rem; border-radius: 8px; min-width: 100px; text-align: center; }
     .stat .num { font-size: 1.5rem; font-weight: 700; }
-    .stat .label { font-size: 0.75rem; color: #666; text-transform: uppercase; }
-    .station { margin-bottom: 2rem; }
-    .station h2 { font-size: 1.125rem; border-bottom: 2px solid #e5e5e5; padding-bottom: 0.5rem; margin-bottom: 1rem; }
-    .issue { border: 1px solid #e5e5e5; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-    .issue-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .stat .label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+    .view-toggle { display: flex; gap: 0; margin-bottom: 1.5rem; }
+    .view-btn { padding: 0.5rem 1rem; border: 1px solid #d1d5db; background: #fff; cursor: pointer; font-size: 0.8rem; font-weight: 500; color: #555; transition: all 0.15s; }
+    .view-btn:first-child { border-radius: 6px 0 0 6px; }
+    .view-btn:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+    .view-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+    .issue { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
+    .issue-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
     .severity { padding: 2px 8px; border-radius: 4px; color: white; font-size: 0.75rem; font-weight: 600; }
+    .calibrated { font-size: 0.7rem; color: #ea580c; margin-left: 0.25rem; }
     .issue h3 { font-size: 0.95rem; }
     .issue p { font-size: 0.875rem; color: #444; margin-top: 0.25rem; }
-    .issue .personas { font-size: 0.75rem; color: #888; margin-top: 0.5rem; }
+    .issue-meta { font-size: 0.75rem; color: #888; margin-top: 0.5rem; display: flex; gap: 1rem; flex-wrap: wrap; }
+    .issue-meta .consensus { font-weight: 600; }
+    .suggestion { font-size: 0.825rem; color: #2563eb; margin-top: 0.5rem; padding: 0.5rem; background: #eff6ff; border-radius: 4px; }
+    .raw-evidence { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed #e5e5e5; display: none; }
+    .raw-evidence.visible { display: block; }
+    .raw-item { font-size: 0.8rem; color: #555; padding: 0.375rem 0; border-bottom: 1px solid #f3f3f3; }
+    .raw-item:last-child { border-bottom: none; }
+    .raw-item .persona-name { font-weight: 600; color: #333; }
+    .toggle-evidence { font-size: 0.75rem; color: #6366f1; cursor: pointer; background: none; border: none; text-decoration: underline; margin-top: 0.5rem; }
+    .warnings { background: #fffbeb; border: 1px solid #fbbf24; border-radius: 8px; padding: 1rem; margin-top: 2rem; }
+    .warnings h3 { font-size: 0.875rem; color: #92400e; margin-bottom: 0.5rem; }
+    .warnings li { font-size: 0.8rem; color: #78350f; }
+    .per-persona-view { display: none; }
+    .per-persona-view.active { display: block; }
+    .merged-view { display: block; }
+    .merged-view.hidden { display: none; }
+    .persona-section { margin-bottom: 1.5rem; }
+    .persona-section h2 { font-size: 1.1rem; border-bottom: 2px solid #e5e5e5; padding-bottom: 0.5rem; margin-bottom: 0.75rem; }
+    .station-group { margin-bottom: 1rem; }
+    .station-group h3 { font-size: 0.9rem; color: #555; margin-bottom: 0.5rem; }
   </style>
 </head>
 <body>
   <h1>UX Walkthrough Report</h1>
-  <div class="meta">${job.url} &mdash; ${new Date().toLocaleDateString()}</div>
-  <div class="summary">
-    <div class="stat"><div class="num">${findings.length}</div><div class="label">Issues</div></div>
-    <div class="stat"><div class="num">${findings.filter(f => f.severity === 'P0').length}</div><div class="label">P0 Blockers</div></div>
-    <div class="stat"><div class="num">${findings.filter(f => f.severity === 'P1').length}</div><div class="label">P1 Severe</div></div>
-    <div class="stat"><div class="num">${Object.keys(byStation).length}</div><div class="label">Stations</div></div>
-  </div>`;
+  <div class="meta">${escHtml(job.url)} &mdash; ${new Date().toLocaleDateString()} &mdash; ${Array.isArray(job.personas) ? job.personas.join(', ') : ''}</div>`;
 
-  for (const [station, issues] of Object.entries(byStation)) {
-    html += `\n  <div class="station">
-    <h2>${station}</h2>`;
-    for (const issue of issues) {
-      const raw = issue.raw_data || {};
-      const color = severityColor[issue.severity] || '#888';
-      html += `
-    <div class="issue">
-      <div class="issue-header">
-        <span class="severity" style="background:${color}">${issue.severity}</span>
-        <h3>${issue.id}: ${raw.title || issue.description?.slice(0, 60) || ''}</h3>
-      </div>
-      <p>${issue.description || ''}</p>
-      <div class="personas">${issue.persona || ''} · ${raw.classification || ''}</div>
-    </div>`;
-    }
-    html += '\n  </div>';
+  // Executive summary
+  if (summary) {
+    html += `
+  <div class="exec-summary">
+    <h2>Executive Summary</h2>
+    <p>${escHtml(summary)}</p>
+  </div>`;
   }
 
-  html += '\n</body>\n</html>\n';
+  // Journey insights
+  if (journeyInsights.length > 0) {
+    html += `
+  <div class="journey-insights">
+    <h2>Journey-Level Patterns</h2>
+    <ul>`;
+    for (const insight of journeyInsights) {
+      html += `\n      <li>${escHtml(insight)}</li>`;
+    }
+    html += `
+    </ul>
+  </div>`;
+  }
+
+  // Stats bar
+  html += `
+  <div class="stats">
+    <div class="stat"><div class="num">${sorted.length}</div><div class="label">${hasMerged ? 'Merged Issues' : 'Issues'}</div></div>
+    <div class="stat"><div class="num" style="color:${severityColor.P0}">${sevCounts.P0}</div><div class="label">P0 Blockers</div></div>
+    <div class="stat"><div class="num" style="color:${severityColor.P1}">${sevCounts.P1}</div><div class="label">P1 Severe</div></div>
+    <div class="stat"><div class="num">${raw.length}</div><div class="label">Raw Findings</div></div>
+    <div class="stat"><div class="num">${Array.isArray(job.personas) ? job.personas.length : 1}</div><div class="label">Personas</div></div>
+  </div>`;
+
+  // View toggle (only show if we have merged findings)
+  if (hasMerged) {
+    html += `
+  <div class="view-toggle">
+    <button class="view-btn active" onclick="switchView('merged')">Merged View</button>
+    <button class="view-btn" onclick="switchView('persona')">Per-Persona View</button>
+  </div>`;
+  }
+
+  // ── Merged View ──
+  html += `\n  <div id="merged-view" class="merged-view">`;
+
+  for (let i = 0; i < sorted.length; i++) {
+    const f = sorted[i];
+    const color = severityColor[f.severity] || '#888';
+    const wasCalibratedUp = hasMerged && f.original_severity && f.severity !== f.original_severity;
+    const personasAffected = Array.isArray(f.personas_affected) ? f.personas_affected.join(', ') : (f.persona || '');
+    const consensus = f.consensus || '';
+    const title = f.title || f.description?.slice(0, 60) || '';
+
+    html += `
+    <div class="issue">
+      <div class="issue-header">
+        <span class="severity" style="background:${color}">${escHtml(f.severity)}</span>`;
+    if (wasCalibratedUp) {
+      html += `<span class="calibrated">&#8593; from ${escHtml(f.original_severity)}</span>`;
+    }
+    html += `
+        <h3>${escHtml(f.id)}: ${escHtml(title)}</h3>
+      </div>
+      <p>${escHtml(f.description || '')}</p>`;
+
+    if (f.suggestion) {
+      html += `\n      <div class="suggestion">${escHtml(f.suggestion)}</div>`;
+    }
+
+    html += `
+      <div class="issue-meta">
+        <span class="consensus">${escHtml(consensus)}</span>
+        <span>${escHtml(personasAffected)}</span>
+        <span>${escHtml(f.classification || '')}</span>`;
+    if (f.merge_reason) {
+      html += `\n        <span>Merge: ${escHtml(f.merge_reason)}</span>`;
+    }
+    html += `
+      </div>`;
+
+    // Per-persona raw evidence (collapsed)
+    if (hasMerged && Array.isArray(f.original_finding_ids) && f.original_finding_ids.length > 0) {
+      html += `\n      <button class="toggle-evidence" onclick="toggleEvidence(this)">Show per-persona evidence (${f.original_finding_ids.length})</button>`;
+      html += `\n      <div class="raw-evidence">`;
+      for (const rawId of f.original_finding_ids) {
+        const rf = rawById[rawId];
+        if (rf) {
+          const rawTitle = rf.raw_data?.title || rf.description?.slice(0, 60) || '';
+          html += `\n        <div class="raw-item"><span class="persona-name">${escHtml(rf.persona)}</span> [${escHtml(rf.severity)}] ${escHtml(rawTitle)}</div>`;
+        }
+      }
+      html += `\n      </div>`;
+    }
+
+    html += `\n    </div>`;
+  }
+
+  html += `\n  </div>`;
+
+  // ── Per-Persona View ──
+  if (hasMerged) {
+    html += `\n  <div id="persona-view" class="per-persona-view">`;
+
+    // Group raw findings by persona
+    const byPersona = {};
+    for (const f of raw) {
+      const persona = f.persona?.split(',')[0]?.trim() || 'Unknown';
+      if (!byPersona[persona]) byPersona[persona] = {};
+      if (!byPersona[persona][f.station]) byPersona[persona][f.station] = [];
+      byPersona[persona][f.station].push(f);
+    }
+
+    for (const [persona, stations] of Object.entries(byPersona)) {
+      html += `\n    <div class="persona-section">
+      <h2>${escHtml(persona)}</h2>`;
+
+      for (const [station, issues] of Object.entries(stations)) {
+        html += `\n      <div class="station-group">
+        <h3>${escHtml(station)}</h3>`;
+        for (const issue of issues) {
+          const rawData = issue.raw_data || {};
+          const color = severityColor[issue.severity] || '#888';
+          html += `
+        <div class="issue">
+          <div class="issue-header">
+            <span class="severity" style="background:${color}">${escHtml(issue.severity)}</span>
+            <h3>${escHtml(issue.id)}: ${escHtml(rawData.title || issue.description?.slice(0, 60) || '')}</h3>
+          </div>
+          <p>${escHtml(issue.description || '')}</p>
+          <div class="issue-meta">
+            <span>${escHtml(rawData.classification || '')}</span>
+          </div>
+        </div>`;
+        }
+        html += `\n      </div>`;
+      }
+
+      html += `\n    </div>`;
+    }
+
+    html += `\n  </div>`;
+  }
+
+  // Synthesis warnings
+  if (synthesisWarnings.length > 0) {
+    html += `
+  <div class="warnings">
+    <h3>Synthesis Warnings</h3>
+    <ul>`;
+    for (const w of synthesisWarnings) {
+      html += `\n      <li>${escHtml(w)}</li>`;
+    }
+    html += `
+    </ul>
+  </div>`;
+  }
+
+  // JS for view toggle + evidence toggle
+  html += `
+  <script>
+    function switchView(view) {
+      var btns = document.querySelectorAll('.view-btn');
+      btns.forEach(function(b) { b.classList.remove('active'); });
+      if (view === 'merged') {
+        document.getElementById('merged-view').classList.remove('hidden');
+        document.getElementById('persona-view').classList.remove('active');
+        btns[0].classList.add('active');
+      } else {
+        document.getElementById('merged-view').classList.add('hidden');
+        document.getElementById('persona-view').classList.add('active');
+        btns[1].classList.add('active');
+      }
+    }
+    function toggleEvidence(btn) {
+      var ev = btn.nextElementSibling;
+      if (ev.classList.contains('visible')) {
+        ev.classList.remove('visible');
+        btn.textContent = btn.textContent.replace('Hide', 'Show');
+      } else {
+        ev.classList.add('visible');
+        btn.textContent = btn.textContent.replace('Show', 'Hide');
+      }
+    }
+  </script>`;
+
+  html += `\n</body>\n</html>\n`;
 
   // Save report to filesystem
   const outputDir = path.join(projectRoot, 'outputs', jobId);
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(path.join(outputDir, 'raw_report.html'), html, 'utf8');
 
-  // Also write manifest
+  // Write manifest
   const manifest = {
     job_id: jobId,
     url: job.url,
-    total_issues: findings.length,
-    by_severity: {
-      P0: findings.filter((f) => f.severity === 'P0').length,
-      P1: findings.filter((f) => f.severity === 'P1').length,
-      P2: findings.filter((f) => f.severity === 'P2').length,
-      P3: findings.filter((f) => f.severity === 'P3').length,
-    },
-    stations_covered: Object.keys(byStation).length,
+    merged_issues: sorted.length,
+    raw_issues: raw.length,
+    by_severity: sevCounts,
+    personas: job.personas,
+    has_synthesis: hasMerged,
+    journey_insights: journeyInsights.length,
+    synthesis_warnings: synthesisWarnings.length,
     generated_at: new Date().toISOString(),
   };
   fs.writeFileSync(path.join(outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2));

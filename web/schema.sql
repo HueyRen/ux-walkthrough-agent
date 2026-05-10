@@ -69,5 +69,33 @@ create policy "Users read own findings"
     )
   );
 
+-- Merged findings table (post-synthesis deduplication)
+create table merged_findings (
+  id text primary key,
+  job_id text references jobs(id),
+  title text not null,
+  severity text check (severity in ('P0','P1','P2','P3')),
+  original_severity text,
+  classification text,
+  personas_affected jsonb not null,
+  consensus text,
+  original_finding_ids jsonb not null,
+  merge_reason text,
+  description text,
+  suggestion text,
+  ai_opportunity text,
+  created_at timestamptz default now()
+);
+
+alter table merged_findings enable row level security;
+
+create policy "Users read own merged findings"
+  on merged_findings for select
+  using (
+    exists (
+      select 1 from jobs where jobs.id = merged_findings.job_id and jobs.user_id = auth.uid()
+    )
+  );
+
 -- Create storage bucket for screenshots (run via Supabase dashboard or API)
 -- insert into storage.buckets (id, name, public) values ('screenshots', 'screenshots', true);

@@ -3,7 +3,7 @@
 const { tool, zodSchema } = require('ai');
 const { z } = require('zod');
 
-function createPlaywrightTools(browser, jobId, supabaseAdmin, jobEmitter) {
+function createPlaywrightTools(browser, jobId, supabaseAdmin, jobEmitter, personaId) {
   let context = null;
   let page = null;
   const screenshotUrls = new Map();
@@ -99,7 +99,9 @@ function createPlaywrightTools(browser, jobId, supabaseAdmin, jobEmitter) {
           buffer = await page.screenshot({ fullPage });
         }
 
-        const storagePath = `${jobId}/${filename}`;
+        const storagePath = personaId
+          ? `${jobId}/${personaId}/${filename}`
+          : `${jobId}/${filename}`;
         const { error } = await supabaseAdmin.storage
           .from('screenshots')
           .upload(storagePath, buffer, { contentType: 'image/png', upsert: true });
@@ -114,7 +116,9 @@ function createPlaywrightTools(browser, jobId, supabaseAdmin, jobEmitter) {
         screenshotUrls.set(filename, publicUrl);
 
         if (jobEmitter) {
-          jobEmitter.emit(`job:${jobId}`, { type: 'screenshot', url: publicUrl, filename });
+          jobEmitter.emit(`job:${jobId}`, {
+            type: 'screenshot', personaId, url: publicUrl, filename,
+          });
         }
 
         return { filename, storageUrl: publicUrl };
@@ -180,6 +184,7 @@ function createPlaywrightTools(browser, jobId, supabaseAdmin, jobEmitter) {
         if (jobEmitter) {
           jobEmitter.emit(`job:${jobId}`, {
             type: 'issue',
+            personaId,
             id: issue.id,
             title: issue.title,
             severity: issue.severity,

@@ -115,4 +115,10 @@ function parseStations(taskCardContent) {
   return stations;
 }
 
-module.exports = { writeConfigs, parseStations };
+function getPersonaDoc(projectRoot, jobId, personaName) {
+  const instanceDir = path.join(projectRoot, 'instances', jobId);
+  const fullPersonas = fs.readFileSync(path.join(instanceDir, 'personas.md'), 'utf8');
+  return filterPersonas(fullPersonas, [personaName]);
+}
+
+module.exports = { writeConfigs, parseStations, getPersonaDoc, filterPersonas };

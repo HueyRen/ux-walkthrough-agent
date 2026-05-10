@@ -529,6 +529,32 @@
     .confirm-btn:hover { background: #1558c0; }
     .confirm-btn:disabled { background: #a0c0f0; cursor: not-allowed; }
 
+    /* Persona tab bar */
+    .persona-tab-bar {
+      display: flex;
+      gap: 4px;
+      padding: 8px 10px;
+      background: #fff;
+      border: 1px solid #dce0e6;
+      border-radius: 12px;
+      flex-shrink: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .persona-tab {
+      padding: 5px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      color: #666;
+      font-family: inherit;
+      transition: background 0.15s, color 0.15s;
+    }
+    .persona-tab:hover { background: #f0f2f5; }
+    .persona-tab.active { background: #edf2fb; color: #1a73e8; font-weight: 600; }
+
     /* Mobile */
     @media (max-width: 800px) {
       .monitor-grid {
@@ -594,6 +620,8 @@
         <div class="progress-label" id="progress-label">等待开始...</div>
       </div>
 
+      <div id="persona-progress" style="display:none; margin-bottom: 12px;"></div>
+
       <div class="current-station-label" id="current-station-label"></div>
 
       <ul class="station-list" id="station-list" role="list"></ul>
@@ -615,6 +643,9 @@
 
     <!-- Right panel -->
     <div class="right-panel">
+      <!-- Persona tab bar (multi-persona only) -->
+      <div class="persona-tab-bar" id="persona-tab-bar" style="display:none"></div>
+
       <!-- Screenshot carousel -->
       <div class="screenshot-area">
         <span class="screenshot-counter" id="screenshot-counter"></span>
@@ -688,6 +719,11 @@
     let autoScroll = true;
     let lastPingTime = Date.now();
     let sse = null;
+
+    // Per-persona state (only used when multiple personas)
+    const personaStates = {}; // personaName -> { screenshots, activeScreenshot, cotHtml, stationState, completedStations, totalIssues }
+    let activePersona = null;
+    let allPersonas = []; // populated from job.personas on init
 
     STATIONS.forEach(s => { stationState[s.id] = { status: 'pending', issues: 0 }; });
 
@@ -920,7 +956,7 @@
       if (stationState[ev.stationId]) {
         stationState[ev.stationId].status = 'current';
       }
-      elCurrentStation.textContent = `当前: ${ev.stationId} ${ev.stationName}`;
+      elCurrentStation.textContent = `${ev.personaId && allPersonas.length > 1 ? ev.personaId + ' · ' : ''}当前: ${ev.stationId} ${ev.stationName}`;
       renderStationList();
       updateProgressBar(completedStations, STATIONS.length, totalIssues);
       setStatusBadge('running');
@@ -995,6 +1031,121 @@
       return d.innerHTML;
     }
 
+    // --- Persona tab management ---
+    function renderPersonaTabs() {
+      const bar = document.getElementById('persona-tab-bar');
+      bar.innerHTML = '';
+      allPersonas.forEach(p => {
+        const btn = document.createElement('button');
+        btn.className = 'persona-tab' + (p === activePersona ? ' active' : '');
+        btn.textContent = p;
+        btn.addEventListener('click', () => switchPersona(p));
+        bar.appendChild(btn);
+      });
+    }
+
+    function renderPersonaProgress() {
+      const wrap = document.getElementById('persona-progress');
+      wrap.innerHTML = '';
+      allPersonas.forEach(p => {
+        const ps = personaStates[p];
+        const total = STATIONS.length;
+        const pct = total > 0 ? Math.round((ps.completedStations / total) * 100) : 0;
+        const isActive = p === activePersona;
+
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer;';
+        row.innerHTML = `
+          <div style="width:4px; height:20px; border-radius:2px; background:${isActive ? '#1a73e8' : '#dce0e6'}; flex-shrink:0;"></div>
+          <span style="font-size:12px; font-weight:${isActive ? '600' : '400'}; color:${isActive ? '#1a1f2e' : '#666'}; width:60px;">${p}</span>
+          <div style="flex:1; height:4px; background:#e9ecf1; border-radius:2px; overflow:hidden;">
+            <div style="width:${pct}%; height:100%; background:${isActive ? '#1a73e8' : '#a5adb8'}; border-radius:2px; transition:width 0.3s;"></div>
+          </div>
+          <span style="font-size:11px; color:#8c95a6; width:30px; text-align:right;">${ps.completedStations}/${total}</span>
+        `;
+        row.addEventListener('click', () => switchPersona(p));
+        wrap.appendChild(row);
+      });
+    }
+
+    function rebuildScreenshotUI() {
+      // Clear thumbs
+      elScreenshotThumbs.innerHTML = '';
+
+      if (screenshots.length === 0) {
+        // Show placeholder if not already present
+        let mainImg = elScreenshotMain.querySelector('img');
+        if (mainImg) mainImg.remove();
+        if (!document.getElementById('screenshot-placeholder')) {
+          const ph = document.createElement('span');
+          ph.className = 'screenshot-placeholder';
+          ph.id = 'screenshot-placeholder';
+          ph.innerHTML = '等待截图...<span class="cursor">▌</span>';
+          elScreenshotMain.insertBefore(ph, elScreenshotMain.firstChild);
+        }
+        updateCarouselControls();
+        return;
+      }
+
+      // Remove placeholder if exists
+      const ph = document.getElementById('screenshot-placeholder');
+      if (ph) ph.remove();
+
+      // Rebuild thumbs and set main image
+      screenshots.forEach((ss, idx) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'screenshot-thumb' + (idx === activeScreenshot ? ' active' : '');
+        thumb.setAttribute('role', 'tab');
+        thumb.innerHTML = `<img src="${ss.url}" alt="${ss.filename}">`;
+        thumb.addEventListener('click', () => setActiveScreenshot(idx));
+        elScreenshotThumbs.appendChild(thumb);
+      });
+
+      if (activeScreenshot >= 0 && activeScreenshot < screenshots.length) {
+        let mainImg = elScreenshotMain.querySelector('img');
+        if (!mainImg) {
+          mainImg = document.createElement('img');
+          elScreenshotMain.appendChild(mainImg);
+        }
+        mainImg.src = screenshots[activeScreenshot].url;
+        mainImg.alt = screenshots[activeScreenshot].filename;
+      }
+
+      updateCarouselControls();
+    }
+
+    function switchPersona(personaName) {
+      if (personaName === activePersona) return;
+      activePersona = personaName;
+
+      const ps = personaStates[personaName];
+
+      // 1. Update tab bar and progress
+      renderPersonaTabs();
+      renderPersonaProgress();
+
+      // 2. Update station list from this persona's state
+      for (const [sid, state] of Object.entries(ps.stationState)) {
+        if (stationState[sid]) {
+          stationState[sid] = { ...state };
+        }
+      }
+      completedStations = ps.completedStations;
+      totalIssues = ps.totalIssues;
+      renderStationList();
+      updateProgressBar(ps.completedStations, STATIONS.length, ps.totalIssues);
+
+      // 3. Rebuild screenshot carousel
+      screenshots = [...ps.screenshots];
+      activeScreenshot = ps.activeScreenshot;
+      rebuildScreenshotUI();
+
+      // 4. Rebuild CoT
+      elCotStream.innerHTML = ps.cotHtml || '<span class="cot-placeholder">等待数据...<span class="cursor">▌</span></span>';
+      cotPlaceholderCleared = !!ps.cotHtml;
+      if (ps.cotHtml) maybeAutoScroll();
+    }
+
     // --- Heartbeat ---
     setInterval(() => {
       const gap = Date.now() - lastPingTime;
@@ -1015,11 +1166,103 @@
         elHeartbeat.classList.remove('warning');
 
         switch (ev.type) {
-          case 'cot':            appendCoT(ev.delta); break;
-          case 'screenshot':     addScreenshot(ev.url, ev.filename); break;
-          case 'tool-call':      appendToolCall(ev.toolName, ev.args); break;
-          case 'issue':          addIssueCard(ev); break;
-          case 'station-change': onStationChange(ev); break;
+          case 'cot':
+            if (allPersonas.length > 1 && ev.personaId) {
+              const ps = personaStates[ev.personaId];
+              if (ps) {
+                const span = document.createElement('span');
+                span.textContent = ev.delta;
+                ps.cotHtml += span.outerHTML;
+                if (ev.personaId === activePersona) appendCoT(ev.delta);
+              }
+            } else {
+              appendCoT(ev.delta);
+            }
+            break;
+
+          case 'screenshot':
+            if (allPersonas.length > 1 && ev.personaId) {
+              const ps = personaStates[ev.personaId];
+              if (ps) {
+                ps.screenshots.push({ url: ev.url, filename: ev.filename });
+                ps.activeScreenshot = ps.screenshots.length - 1;
+                if (ev.personaId === activePersona) addScreenshot(ev.url, ev.filename);
+              }
+            } else {
+              addScreenshot(ev.url, ev.filename);
+            }
+            break;
+
+          case 'tool-call':
+            if (allPersonas.length > 1 && ev.personaId) {
+              const ps = personaStates[ev.personaId];
+              if (ps) {
+                const argsStr = typeof ev.args === 'string' ? ev.args :
+                  (ev.args?.url || ev.args?.filename || ev.args?.id || ev.args?.selector || ev.args?.text || JSON.stringify(ev.args).slice(0, 80));
+                ps.cotHtml += `<div><span class="cot-tool-pill"><span class="tool-name">▸ ${escHtml(ev.toolName)}</span> → ${escHtml(String(argsStr))}</span></div>`;
+                if (ev.personaId === activePersona) appendToolCall(ev.toolName, ev.args);
+              }
+            } else {
+              appendToolCall(ev.toolName, ev.args);
+            }
+            break;
+
+          case 'issue':
+            if (allPersonas.length > 1 && ev.personaId) {
+              const ps = personaStates[ev.personaId];
+              if (ps) {
+                ps.totalIssues++;
+                const sevClass = (ev.severity || '').toLowerCase();
+                ps.cotHtml += `<div class="cot-issue-card ${sevClass}"><div class="issue-title">${escHtml(ev.severity)} ${escHtml(ev.id)}: ${escHtml(ev.title || '')}</div><div class="issue-meta">${escHtml(ev.station || '')} · ${escHtml(ev.persona || '')}</div></div>`;
+                if (ev.personaId === activePersona) {
+                  addIssueCard(ev);
+                } else {
+                  renderPersonaProgress();
+                }
+              }
+            } else {
+              addIssueCard(ev);
+            }
+            break;
+
+          case 'station-change':
+            if (allPersonas.length > 1 && ev.personaId) {
+              const ps = personaStates[ev.personaId];
+              if (ps) {
+                // Mark previous current as done
+                for (const [sid, state] of Object.entries(ps.stationState)) {
+                  if (state.status === 'current') {
+                    state.status = 'done';
+                    ps.completedStations++;
+                  }
+                }
+                if (ps.stationState[ev.stationId]) {
+                  ps.stationState[ev.stationId].status = 'current';
+                }
+                // Buffer station divider
+                ps.cotHtml += `<div class="cot-station-divider">── 站点 ${ev.stationId}: ${ev.stationName} ──</div>`;
+
+                if (ev.personaId === activePersona) {
+                  onStationChange(ev);
+                }
+                renderPersonaProgress();
+              }
+            } else {
+              onStationChange(ev);
+            }
+            break;
+
+          case 'synthesis-start':
+            clearCotPlaceholder();
+            {
+              const synthDiv = document.createElement('div');
+              synthDiv.className = 'cot-station-divider';
+              synthDiv.textContent = '── 综合分析中... ──';
+              elCotStream.appendChild(synthDiv);
+              maybeAutoScroll();
+            }
+            break;
+
           case 'done':
           case 'failed':
             sse.close();
@@ -1071,6 +1314,30 @@
         document.getElementById('planning-layout').style.display = 'none';
         document.getElementById('monitor-grid').style.display = 'grid';
         setStatusBadge('queued');
+
+        // Initialize per-persona state if multiple personas
+        if (jobData) {
+          allPersonas = jobData.personas || [];
+          if (allPersonas.length > 1) {
+            allPersonas.forEach(p => {
+              personaStates[p] = {
+                screenshots: [],
+                activeScreenshot: -1,
+                cotHtml: '',
+                stationState: {},
+                completedStations: 0,
+                totalIssues: 0,
+              };
+              STATIONS.forEach(s => { personaStates[p].stationState[s.id] = { status: 'pending', issues: 0 }; });
+            });
+            activePersona = allPersonas[0];
+            renderPersonaTabs();
+            renderPersonaProgress();
+            document.getElementById('persona-tab-bar').style.display = 'flex';
+            document.getElementById('persona-progress').style.display = 'block';
+          }
+        }
+
         renderStationList();
         updateProgressBar(0, STATIONS.length, 0);
         connectSSE();
@@ -1227,6 +1494,27 @@
           elTime.textContent = timeAgo(job.created_at);
           setStatusBadge(job.status);
           totalIssues = job.issue_count || 0;
+
+          // Initialize per-persona state if multiple personas
+          allPersonas = job.personas || [];
+          if (allPersonas.length > 1) {
+            allPersonas.forEach(p => {
+              personaStates[p] = {
+                screenshots: [],
+                activeScreenshot: -1,
+                cotHtml: '',
+                stationState: {},
+                completedStations: 0,
+                totalIssues: 0,
+              };
+              STATIONS.forEach(s => { personaStates[p].stationState[s.id] = { status: 'pending', issues: 0 }; });
+            });
+            activePersona = allPersonas[0];
+            renderPersonaTabs();
+            renderPersonaProgress();
+            document.getElementById('persona-tab-bar').style.display = 'flex';
+            document.getElementById('persona-progress').style.display = 'block';
+          }
 
           // Populate station states from job progress
           if (job.progress && job.progress.stations) {
