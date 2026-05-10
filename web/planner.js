@@ -192,7 +192,7 @@ async function generatePlan(projectRoot, jobId, context) {
 
     console.log(`[planner] Generating plan for job ${jobId}...`);
 
-    const PLAN_TIMEOUT_MS = 60_000;
+    const PLAN_TIMEOUT_MS = 120_000;
     const { text } = await Promise.race([
       generateText({
         model: getModel('claude-sonnet'),

@@ -5,6 +5,17 @@ const { getModel } = require('./models');
 const { supabaseAdmin } = require('./supabase');
 const { getJob, updateJob } = require('./db');
 
+const SYNTH_TIMEOUT_MS = 60_000; // 60s per synthesis LLM call
+
+function generateTextWithTimeout(options, timeoutMs = SYNTH_TIMEOUT_MS) {
+  return Promise.race([
+    generateText(options),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Synthesis LLM timeout (${timeoutMs / 1000}s)`)), timeoutMs)
+    ),
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -154,7 +165,7 @@ Every index from 0 to ${findings.length - 1} must appear in exactly one group's 
 
   let llmOutput;
   try {
-    const { text } = await generateText({
+    const { text } = await generateTextWithTimeout({
       model: getModel('claude-sonnet'),
       prompt,
     });
@@ -260,7 +271,7 @@ Respond with a JSON array of strings (no extra prose):
 \`\`\``;
 
   try {
-    const { text } = await generateText({
+    const { text } = await generateTextWithTimeout({
       model: getModel('claude-sonnet'),
       prompt,
     });
@@ -321,7 +332,7 @@ Requirements:
 Respond with plain text only (no JSON, no markdown formatting).`;
 
   try {
-    const { text } = await generateText({
+    const { text } = await generateTextWithTimeout({
       model: getModel('claude-sonnet'),
       prompt,
     });

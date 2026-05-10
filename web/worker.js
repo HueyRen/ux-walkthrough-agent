@@ -12,6 +12,12 @@ const { supabaseAdmin } = require('./supabase');
 const { jobEmitter } = require('./emitter');
 const { getPersonaDoc } = require('./config-writer');
 
+// Timeout constants (milliseconds)
+const STATION_TIMEOUT_MS = 180_000;   // 3 min per station (LLM + browser ops)
+const BROWSER_LAUNCH_TIMEOUT_MS = 30_000; // 30s to launch Chromium
+const JOB_TIMEOUT_MS = 15 * 60_000;  // 15 min total per job
+const SYNTH_TIMEOUT_MS = 60_000;      // 60s per synthesis LLM call
+
 function createWorker(projectRoot) {
   let queue;
   const abortControllers = new Map();
@@ -75,6 +81,13 @@ async function runPersonaStations({
     let stationDone = false;
 
     while (retryCount <= 2 && !stationDone) {
+      // Per-station timeout: abort this station after STATION_TIMEOUT_MS
+      const stationAc = new AbortController();
+      const stationTimer = setTimeout(() => stationAc.abort(), STATION_TIMEOUT_MS);
+      // Chain: if job-level signal aborts, also abort this station
+      const onJobAbort = () => stationAc.abort();
+      signal.addEventListener('abort', onJobAbort, { once: true });
+
       try {
         const stationPrompt = buildStationPrompt(station, personaDoc, job, userGoal);
 
@@ -96,7 +109,7 @@ async function runPersonaStations({
           tools,
           stopWhen: stepCountIs(50),
           maxTokens: 4096,
-          abortSignal: signal,
+          abortSignal: stationAc.signal,
           experimental_allowSystemInMessages: true,
         });
 
@@ -132,15 +145,24 @@ async function runPersonaStations({
         checker.recordComplete(station.id);
         stationDone = true;
       } catch (err) {
-        console.error(`[${personaName}] Station ${station.id} error (attempt ${retryCount + 1}):`, err.message);
-        const classification = checker.recordError(station.id, err);
-        if (classification.shouldRetry) {
+        // Distinguish station timeout from other errors
+        const isTimeout = stationAc.signal.aborted && !signal.aborted;
+        const errorMsg = isTimeout
+          ? `Station ${station.id} timeout (${STATION_TIMEOUT_MS / 1000}s)`
+          : err.message;
+        console.error(`[${personaName}] Station ${station.id} error (attempt ${retryCount + 1}):`, errorMsg);
+
+        const classification = checker.recordError(station.id, isTimeout ? new Error(errorMsg) : err);
+        if (classification.shouldRetry && !isTimeout) {
           retryCount++;
           await closeContext();
           await newContext();
         } else {
-          break;
+          break; // Timeouts skip retries -- move to next station
         }
+      } finally {
+        clearTimeout(stationTimer);
+        signal.removeEventListener('abort', onJobAbort);
       }
     }
 
@@ -161,6 +183,12 @@ async function runJob(jobId, projectRoot, abortControllers) {
   const ac = new AbortController();
   abortControllers.set(jobId, ac);
   const signal = ac.signal;
+
+  // Job-level timeout: abort everything after JOB_TIMEOUT_MS
+  const jobTimer = setTimeout(() => {
+    console.error(`[${jobId}] Job timeout (${JOB_TIMEOUT_MS / 60_000} min) -- aborting`);
+    ac.abort();
+  }, JOB_TIMEOUT_MS);
 
   try {
     await updateJob(jobId, { status: 'running', started_at: new Date().toISOString() });
@@ -194,11 +222,16 @@ async function runJob(jobId, projectRoot, abortControllers) {
       fullSystemPrompt += `\n\n## 用户补充指令\n${job.plan.user_prompt}`;
     }
 
-    // Launch browser
-    const browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
-    });
+    // Launch browser (with timeout)
+    const browser = await Promise.race([
+      chromium.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Browser launch timeout (${BROWSER_LAUNCH_TIMEOUT_MS / 1000}s)`)), BROWSER_LAUNCH_TIMEOUT_MS)
+      ),
+    ]);
 
     const personas = job.personas;
 
@@ -263,13 +296,19 @@ async function runJob(jobId, projectRoot, abortControllers) {
 
     await browser.close();
   } catch (err) {
-    console.error(`Job ${jobId} fatal error:`, err);
+    const isJobTimeout = signal.aborted && err.message?.includes('abort');
+    const errorMsg = isJobTimeout
+      ? `Job timeout (${JOB_TIMEOUT_MS / 60_000} min)`
+      : err.message;
+    console.error(`Job ${jobId} fatal error:`, errorMsg);
     await updateJob(jobId, {
-      status: 'failed',
-      error_msg: err.message,
+      status: isJobTimeout ? 'timeout' : 'failed',
+      error_msg: errorMsg,
+      completed_at: new Date().toISOString(),
     }).catch(() => {});
-    jobEmitter.emit(`job:${jobId}`, { type: 'failed', error: err.message });
+    jobEmitter.emit(`job:${jobId}`, { type: 'failed', error: errorMsg });
   } finally {
+    clearTimeout(jobTimer);
     abortControllers.delete(jobId);
   }
 }
