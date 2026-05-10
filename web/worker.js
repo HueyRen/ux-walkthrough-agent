@@ -13,6 +13,7 @@ const { jobEmitter } = require('./emitter');
 
 function createWorker(projectRoot) {
   let queue;
+  const abortControllers = new Map();
 
   async function getQueue() {
     if (!queue) {
@@ -24,14 +25,27 @@ function createWorker(projectRoot) {
 
   function enqueue(jobId) {
     getQueue().then((q) => {
-      q.add(() => runJob(jobId, projectRoot));
+      q.add(() => runJob(jobId, projectRoot, abortControllers));
     });
   }
 
-  return { enqueue };
+  function abort(jobId) {
+    const ac = abortControllers.get(jobId);
+    if (ac) {
+      ac.abort();
+      return true;
+    }
+    return false;
+  }
+
+  return { enqueue, abort };
 }
 
-async function runJob(jobId, projectRoot) {
+async function runJob(jobId, projectRoot, abortControllers) {
+  const ac = new AbortController();
+  abortControllers.set(jobId, ac);
+  const signal = ac.signal;
+
   try {
     await updateJob(jobId, { status: 'running', started_at: new Date().toISOString() });
 
@@ -81,6 +95,7 @@ async function runJob(jobId, projectRoot) {
     // Per-station execution loop
     for (const station of stations) {
       if (checker.shouldHalt()) break;
+      if (signal.aborted) throw new Error('手动中断');
 
       checker.setCurrent(station.id);
       await updateJob(jobId, { progress: checker.toProgress() });
@@ -107,6 +122,7 @@ async function runJob(jobId, projectRoot) {
             tools,
             stopWhen: stepCountIs(50),
             maxTokens: 4096,
+            abortSignal: signal,
           });
 
           // Consume the stream and emit events
@@ -163,6 +179,8 @@ async function runJob(jobId, projectRoot) {
       error_msg: err.message,
     }).catch(() => {});
     jobEmitter.emit(`job:${jobId}`, { type: 'failed', error: err.message });
+  } finally {
+    abortControllers.delete(jobId);
   }
 }
 

@@ -9,24 +9,26 @@
 
     body {
       font-family: -apple-system, system-ui, sans-serif;
-      background: #f5f5f5;
+      background: #f2f3f5;
       color: #333;
       min-height: 100vh;
     }
 
     /* Top nav */
     .top-nav {
-      padding: 12px 16px;
+      padding: 12px 20px;
       font-size: 13px;
       background: #fff;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid #e4e6ea;
     }
     .top-nav a {
-      color: #1a73e8;
+      color: #4a6fa5;
       text-decoration: none;
       margin-right: 16px;
+      font-weight: 500;
+      transition: color 0.15s;
     }
-    .top-nav a:hover { text-decoration: underline; }
+    .top-nav a:hover { color: #2d5a9e; text-decoration: underline; }
 
     /* === Planning state: single-column centered === */
     .planning-layout {
@@ -37,19 +39,20 @@
 
     .card {
       background: #ffffff;
-      border: 1px solid #d0d0d0;
-      border-radius: 10px;
+      border: 1px solid #dce0e6;
+      border-radius: 12px;
       padding: 24px;
       margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
 
     /* === Execution state: split-panel === */
     .monitor-grid {
       display: grid;
       grid-template-columns: 280px 1fr;
-      gap: 16px;
+      gap: 12px;
       height: calc(100vh - 49px);
-      padding: 16px;
+      padding: 12px 16px;
     }
 
     @media (max-width: 1024px) {
@@ -59,19 +62,20 @@
     /* Left panel */
     .left-panel {
       background: #fff;
-      border: 1px solid #d0d0d0;
-      border-radius: 10px;
+      border: 1px solid #dce0e6;
+      border-radius: 12px;
       padding: 20px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
 
     /* Right panel */
     .right-panel {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
       min-height: 0;
     }
 
@@ -84,50 +88,51 @@
       gap: 8px;
       margin-bottom: 16px;
     }
-    .job-title { font-size: 15px; font-weight: 600; color: #333; }
-    .job-meta { font-size: 11px; color: #999; font-family: monospace; margin-top: 4px; }
+    .job-title { font-size: 15px; font-weight: 600; color: #1a1f2e; }
+    .job-meta { font-size: 11px; color: #8c95a6; font-family: monospace; margin-top: 4px; }
     .job-meta span { margin-right: 8px; }
 
     /* Status badges */
     .status-badge {
       display: inline-block;
       font-size: 11px;
-      font-weight: 500;
-      padding: 2px 10px;
+      font-weight: 600;
+      padding: 3px 10px;
       border-radius: 12px;
       white-space: nowrap;
+      letter-spacing: 0.02em;
     }
     .status-badge.planning { background: #e8f0fe; color: #1a73e8; }
-    .status-badge.queued   { background: #e2e3e5; color: #383d41; }
-    .status-badge.running  { background: #fff3cd; color: #856404; }
-    .status-badge.done     { background: #d4edda; color: #155724; }
-    .status-badge.failed   { background: #f8d7da; color: #721c24; }
-    .status-badge.timeout  { background: #fff3cd; color: #856404; }
-    .status-badge.partial  { background: #fff3cd; color: #856404; }
+    .status-badge.queued   { background: #eef0f4; color: #5a6577; }
+    .status-badge.running  { background: #fef3e0; color: #b47312; }
+    .status-badge.done     { background: #e6f5ea; color: #1a7a3a; }
+    .status-badge.failed   { background: #fde8ea; color: #c41e3a; }
+    .status-badge.timeout  { background: #fef3e0; color: #b47312; }
+    .status-badge.partial  { background: #fef3e0; color: #b47312; }
 
     /* Progress bar */
     .progress-wrap { margin-bottom: 4px; }
     .progress-bar-track {
-      background: #e9ecef;
-      border-radius: 3px;
-      height: 6px;
+      background: #e9ecf1;
+      border-radius: 4px;
+      height: 5px;
       overflow: hidden;
-      margin-bottom: 4px;
+      margin-bottom: 5px;
     }
     .progress-bar-fill {
       height: 100%;
-      background: #1a73e8;
-      border-radius: 3px;
-      transition: width 0.4s ease, background-color 0.3s ease;
+      background: linear-gradient(90deg, #4a8fe7, #1a73e8);
+      border-radius: 4px;
+      transition: width 0.4s ease, background 0.3s ease;
       width: 0%;
     }
-    .progress-bar-fill.done-flash { background: #28a745; }
-    .progress-label { font-size: 11px; color: #888; }
+    .progress-bar-fill.done-flash { background: linear-gradient(90deg, #4caf50, #28a745); }
+    .progress-label { font-size: 11px; color: #8c95a6; }
 
     /* Current station label */
     .current-station-label {
       font-size: 12px;
-      color: #1a73e8;
+      color: #4a8fe7;
       font-weight: 500;
       margin: 8px 0;
       min-height: 18px;
@@ -139,18 +144,18 @@
       display: flex;
       align-items: center;
       padding: 6px 0;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid #f0f2f5;
       font-size: 13px;
     }
     .station-item:last-child { border-bottom: none; }
     .station-icon { width: 20px; font-size: 13px; flex-shrink: 0; }
     .station-icon.done    { color: #28a745; }
     .station-icon.current { color: #1a73e8; }
-    .station-icon.pending { color: #ccc; }
+    .station-icon.pending { color: #c8cdd6; }
     .station-name { flex: 1; color: #333; }
-    .station-name.pending { color: #aaa; }
-    .station-name.current { font-weight: 600; }
-    .station-right { font-size: 11px; color: #888; margin-left: 6px; }
+    .station-name.pending { color: #a5adb8; }
+    .station-name.current { font-weight: 600; color: #1a1f2e; }
+    .station-right { font-size: 11px; color: #8c95a6; margin-left: 6px; }
     .station-right.current-label { color: #1a73e8; }
 
     /* Download button */
@@ -160,7 +165,7 @@
       padding: 10px 20px;
       background: #28a745;
       color: #fff;
-      border-radius: 6px;
+      border-radius: 8px;
       font-size: 13px;
       font-weight: 500;
       text-decoration: none;
@@ -175,24 +180,31 @@
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* === Screenshot viewer === */
+    /* === Screenshot viewer — light carousel === */
     .screenshot-area {
-      height: clamp(220px, 40vh, 480px);
-      background: #0a0a0a;
-      border-radius: 8px;
+      flex: 1;
+      min-height: 0;
+      background: #fff;
+      border: 1px solid #dce0e6;
+      border-radius: 12px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       position: relative;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
-    .screenshot-label {
+    .screenshot-counter {
       position: absolute;
-      top: 8px;
-      right: 12px;
-      font-size: 10px;
-      color: #555;
-      z-index: 1;
+      top: 10px;
+      right: 14px;
+      font-size: 11px;
+      color: #8c95a6;
+      background: rgba(255,255,255,0.85);
+      padding: 2px 8px;
+      border-radius: 10px;
+      z-index: 2;
       pointer-events: none;
+      backdrop-filter: blur(4px);
     }
     .screenshot-main {
       flex: 1;
@@ -201,46 +213,82 @@
       justify-content: center;
       min-height: 0;
       cursor: zoom-in;
+      position: relative;
+      background: #f8f9fb;
     }
     .screenshot-main img {
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
     }
-    .screenshot-main:hover { outline: 2px solid #1a73e8; outline-offset: -2px; }
     .screenshot-placeholder {
-      color: #555;
-      font-size: 14px;
+      color: #a5adb8;
+      font-size: 13px;
       animation: pulse 2s ease-in-out infinite;
     }
     @keyframes pulse {
       0%, 100% { opacity: 0.5; }
       50%      { opacity: 1; }
     }
+
+    /* Carousel arrows */
+    .carousel-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid #dce0e6;
+      background: rgba(255,255,255,0.92);
+      color: #4a5568;
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      backdrop-filter: blur(4px);
+    }
+    .carousel-arrow:hover { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+    .carousel-arrow:disabled { opacity: 0.3; cursor: default; }
+    .carousel-arrow.prev { left: 10px; }
+    .carousel-arrow.next { right: 10px; }
+
+    /* Thumbnail strip */
     .screenshot-thumbs {
       display: flex;
-      gap: 4px;
-      padding: 6px 8px;
+      gap: 6px;
+      padding: 8px 10px;
       overflow-x: auto;
-      background: #111;
+      background: #f5f6f8;
+      border-top: 1px solid #eceef2;
       flex-shrink: 0;
     }
+    .screenshot-thumbs::-webkit-scrollbar { height: 4px; }
+    .screenshot-thumbs::-webkit-scrollbar-track { background: transparent; }
+    .screenshot-thumbs::-webkit-scrollbar-thumb { background: #c8cdd6; border-radius: 2px; }
+
     .screenshot-thumb {
-      width: 96px;
-      height: 64px;
+      width: 80px;
+      height: 52px;
       flex-shrink: 0;
-      border-radius: 4px;
+      border-radius: 6px;
       overflow: hidden;
       cursor: pointer;
       border: 2px solid transparent;
-      opacity: 0.7;
-      transition: opacity 0.15s, border-color 0.15s;
+      opacity: 0.6;
+      transition: opacity 0.15s, border-color 0.15s, transform 0.15s;
+      background: #e9ecf1;
     }
     .screenshot-thumb.active {
-      border-color: #1a73e8;
+      border-color: #4a8fe7;
       opacity: 1;
+      transform: scale(1.03);
     }
-    .screenshot-thumb:hover { opacity: 1; }
+    .screenshot-thumb:hover { opacity: 0.9; }
     .screenshot-thumb img {
       width: 100%;
       height: 100%;
@@ -252,11 +300,12 @@
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.9);
+      background: rgba(0,0,0,0.85);
       z-index: 1000;
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      backdrop-filter: blur(2px);
     }
     .lightbox.open { display: flex; }
     .lightbox img {
@@ -264,53 +313,65 @@
       max-height: 95vh;
       object-fit: contain;
       cursor: default;
+      border-radius: 4px;
     }
 
-    /* === CoT stream === */
+    /* === CoT stream — light === */
     .cot-area {
-      flex: 1;
-      min-height: 200px;
-      background: #111;
-      border-radius: 8px;
+      height: 160px;
+      min-height: 120px;
+      max-height: 200px;
+      background: #fff;
+      border: 1px solid #dce0e6;
+      border-radius: 12px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      flex-shrink: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
     .cot-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 8px 12px;
+      padding: 7px 14px;
       font-size: 12px;
-      color: #737373;
-      border-bottom: 1px solid #262626;
+      color: #8c95a6;
+      font-weight: 500;
+      border-bottom: 1px solid #eceef2;
       flex-shrink: 0;
+      background: #fafbfc;
     }
     .heartbeat {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       background: #28a745;
       animation: heartbeat 2s ease-in-out infinite;
     }
-    .heartbeat.warning { background: #eab308; animation: none; }
+    .heartbeat.warning { background: #e6a817; animation: none; }
     @keyframes heartbeat {
-      0%, 100% { opacity: 0.4; }
+      0%, 100% { opacity: 0.3; }
       50%      { opacity: 1; }
     }
     .cot-stream {
       flex: 1;
       overflow-y: auto;
-      padding: 8px 12px;
+      padding: 8px 14px;
       font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-      font-size: 13px;
+      font-size: 12px;
       white-space: pre-wrap;
       word-break: break-word;
-      color: #999;
-      line-height: 1.5;
+      color: #6b7a8d;
+      line-height: 1.6;
+      background: #fff;
     }
+    .cot-stream::-webkit-scrollbar { width: 4px; }
+    .cot-stream::-webkit-scrollbar-track { background: transparent; }
+    .cot-stream::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 2px; }
+
     .cot-placeholder {
-      color: #555;
+      color: #a5adb8;
       font-style: italic;
     }
     .cot-placeholder .cursor {
@@ -321,76 +382,77 @@
       50%      { opacity: 0; }
     }
 
-    /* CoT content types */
+    /* CoT content types — light */
     .cot-tool-pill {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      background: #1a2332;
-      border: 1px solid #2a3a4a;
-      border-radius: 4px;
+      background: #edf2fb;
+      border: 1px solid #d4dff0;
+      border-radius: 5px;
       padding: 2px 8px;
-      font-size: 12px;
-      color: #7eb8f0;
+      font-size: 11px;
+      color: #3a6aaa;
       margin: 2px 0;
     }
-    .cot-tool-pill .tool-name { font-weight: 500; }
+    .cot-tool-pill .tool-name { font-weight: 600; }
     .cot-station-divider {
       text-align: center;
-      color: #666;
-      border-top: 1px solid #333;
-      margin: 12px 0;
-      padding-top: 8px;
-      font-size: 12px;
+      color: #8c95a6;
+      border-top: 1px solid #e4e6ea;
+      margin: 10px 0;
+      padding-top: 6px;
+      font-size: 11px;
     }
     .cot-issue-card {
-      background: #1a1a1a;
-      padding: 8px 12px;
-      border-radius: 4px;
-      margin: 6px 0;
-      border-left: 3px solid #6b7280;
+      background: #f8f9fb;
+      padding: 7px 10px;
+      border-radius: 6px;
+      margin: 4px 0;
+      border-left: 3px solid #a5adb8;
     }
-    .cot-issue-card.p0 { border-left-color: #ef4444; }
-    .cot-issue-card.p1 { border-left-color: #f97316; }
-    .cot-issue-card.p2 { border-left-color: #eab308; }
-    .cot-issue-card.p3 { border-left-color: #6b7280; }
-    .cot-issue-card .issue-title { color: #fff; font-size: 13px; font-weight: 500; }
-    .cot-issue-card .issue-meta { color: #aaa; font-size: 11px; margin-top: 2px; }
+    .cot-issue-card.p0 { border-left-color: #dc3545; background: #fef5f5; }
+    .cot-issue-card.p1 { border-left-color: #e8720c; background: #fef8f0; }
+    .cot-issue-card.p2 { border-left-color: #c49b1a; background: #fefdf0; }
+    .cot-issue-card.p3 { border-left-color: #a5adb8; }
+    .cot-issue-card .issue-title { color: #1a1f2e; font-size: 12px; font-weight: 500; }
+    .cot-issue-card .issue-meta { color: #8c95a6; font-size: 10px; margin-top: 2px; }
 
     /* SSE reconnect bar */
     .reconnect-bar {
       display: none;
-      padding: 6px 12px;
-      background: #78350f;
-      color: #fbbf24;
-      font-size: 12px;
+      padding: 5px 12px;
+      background: #fef3e0;
+      color: #b47312;
+      font-size: 11px;
       text-align: center;
       flex-shrink: 0;
+      border-bottom: 1px solid #f0dbb5;
     }
     .reconnect-bar.show { display: block; }
 
     /* CoT done divider */
     .cot-done-divider {
       text-align: center;
-      color: #28a745;
-      border-top: 1px solid #28a745;
-      margin: 12px 0;
-      padding-top: 8px;
-      font-size: 13px;
+      color: #1a7a3a;
+      border-top: 1px solid #c3e6cb;
+      margin: 10px 0;
+      padding-top: 6px;
+      font-size: 12px;
       font-weight: 500;
     }
 
     /* Error card */
     .error-card {
-      background: #fff8f8;
-      border: 1px solid #f5c6cb;
+      background: #fef5f5;
+      border: 1px solid #f0c6cb;
       border-radius: 10px;
-      padding: 16px 20px;
+      padding: 14px 18px;
       margin-top: 12px;
       display: none;
     }
-    .error-card .error-title { font-size: 13px; font-weight: 600; color: #721c24; margin-bottom: 4px; }
-    .error-card .error-detail { font-size: 12px; color: #856060; margin-bottom: 10px; line-height: 1.5; }
+    .error-card .error-title { font-size: 13px; font-weight: 600; color: #c41e3a; margin-bottom: 4px; }
+    .error-card .error-detail { font-size: 12px; color: #8a5a60; margin-bottom: 10px; line-height: 1.5; }
 
     .retry-btn {
       padding: 7px 16px;
@@ -401,9 +463,26 @@
       font-size: 12px;
       font-family: inherit;
       cursor: pointer;
+      transition: background 0.15s;
     }
     .retry-btn:hover { background: #b02a37; }
     .retry-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+    .abort-btn {
+      width: 100%;
+      padding: 9px;
+      background: #fff;
+      color: #c41e3a;
+      border: 1px solid #f0c6cb;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .abort-btn:hover { background: #fef5f5; border-color: #e09aa3; }
+    .abort-btn:disabled { color: #ccc; border-color: #e4e6ea; cursor: not-allowed; background: #fafbfc; }
 
     /* Plan confirmation UI */
     .plan-station-list { list-style: none; margin: 0 0 16px; }
@@ -411,39 +490,41 @@
       display: flex;
       align-items: center;
       padding: 7px 0;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid #f0f2f5;
       font-size: 14px;
     }
     .plan-station-item:last-child { border-bottom: none; }
-    .plan-station-id { width: 32px; font-size: 12px; color: #999; font-family: monospace; flex-shrink: 0; }
+    .plan-station-id { width: 32px; font-size: 12px; color: #8c95a6; font-family: monospace; flex-shrink: 0; }
     .plan-station-name { color: #333; }
     .plan-prompt-label { font-size: 13px; font-weight: 500; color: #555; margin-bottom: 6px; }
     .plan-prompt-textarea {
       width: 100%;
       padding: 10px 12px;
-      border: 1.5px solid #d0d0d0;
-      border-radius: 6px;
+      border: 1.5px solid #dce0e6;
+      border-radius: 8px;
       font-size: 14px;
       font-family: inherit;
       color: #333;
       resize: vertical;
       min-height: 72px;
       outline: none;
+      transition: border-color 0.15s;
     }
-    .plan-prompt-textarea:focus { border-color: #4a90d9; }
-    .plan-prompt-textarea::placeholder { color: #aaa; }
+    .plan-prompt-textarea:focus { border-color: #4a8fe7; }
+    .plan-prompt-textarea::placeholder { color: #a5adb8; }
     .confirm-btn {
       width: 100%;
       padding: 11px;
       background: #1a73e8;
       color: #fff;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       font-size: 14px;
       font-weight: 500;
       font-family: inherit;
       cursor: pointer;
       margin-top: 16px;
+      transition: background 0.15s;
     }
     .confirm-btn:hover { background: #1558c0; }
     .confirm-btn:disabled { background: #a0c0f0; cursor: not-allowed; }
@@ -457,9 +538,10 @@
       }
       .left-panel { order: 0; }
       .right-panel { order: 1; }
-      .screenshot-area { height: clamp(180px, 30vh, 280px); }
-      .cot-area { max-height: 40vh; }
-      .screenshot-thumb { width: 64px; height: 44px; }
+      .screenshot-area { min-height: 200px; max-height: 300px; flex: none; }
+      .cot-area { height: 140px; max-height: 180px; }
+      .screenshot-thumb { width: 60px; height: 40px; }
+      .carousel-arrow { width: 28px; height: 28px; font-size: 12px; }
     }
   </style>
 </head>
@@ -516,6 +598,10 @@
 
       <ul class="station-list" id="station-list" role="list"></ul>
 
+      <div id="abort-wrap" style="display:none; margin-top: auto; padding-top: 12px;">
+        <button class="abort-btn" id="abort-btn">中断走查</button>
+      </div>
+
       <div id="download-wrap" style="display:none">
         <a id="download-btn" class="download-btn" href="#">下载 HTML 报告</a>
       </div>
@@ -529,10 +615,12 @@
 
     <!-- Right panel -->
     <div class="right-panel">
-      <!-- Screenshot viewer -->
+      <!-- Screenshot carousel -->
       <div class="screenshot-area">
-        <span class="screenshot-label">最近截图</span>
+        <span class="screenshot-counter" id="screenshot-counter"></span>
         <div class="screenshot-main" id="screenshot-main" role="tabpanel">
+          <button class="carousel-arrow prev" id="carousel-prev" disabled>‹</button>
+          <button class="carousel-arrow next" id="carousel-next" disabled>›</button>
           <span class="screenshot-placeholder" id="screenshot-placeholder">等待截图...</span>
         </div>
         <div class="screenshot-thumbs" id="screenshot-thumbs" role="tablist"></div>
@@ -612,6 +700,8 @@
     const elProgressLabel = document.getElementById('progress-label');
     const elStationList = document.getElementById('station-list');
     const elCurrentStation = document.getElementById('current-station-label');
+    const elAbortWrap = document.getElementById('abort-wrap');
+    const elAbortBtn = document.getElementById('abort-btn');
     const elDownloadWrap = document.getElementById('download-wrap');
     const elDownloadBtn = document.getElementById('download-btn');
     const elErrorCard = document.getElementById('error-card');
@@ -621,6 +711,9 @@
     const elScreenshotMain = document.getElementById('screenshot-main');
     const elScreenshotPlaceholder = document.getElementById('screenshot-placeholder');
     const elScreenshotThumbs = document.getElementById('screenshot-thumbs');
+    const elScreenshotCounter = document.getElementById('screenshot-counter');
+    const elCarouselPrev = document.getElementById('carousel-prev');
+    const elCarouselNext = document.getElementById('carousel-next');
     const elCotStream = document.getElementById('cot-stream');
     const elCotPlaceholder = document.getElementById('cot-placeholder');
     const elHeartbeat = document.getElementById('heartbeat');
@@ -676,9 +769,20 @@
       };
       elBadge.textContent = labels[status] || status;
       elBadge.setAttribute('aria-label', `状态: ${labels[status] || status}`);
+
+      // Show/hide abort button
+      const canAbort = status === 'running' || status === 'queued';
+      elAbortWrap.style.display = canAbort ? 'block' : 'none';
     }
 
-    // --- Screenshots ---
+    // --- Screenshots (carousel) ---
+    function updateCarouselControls() {
+      const total = screenshots.length;
+      elCarouselPrev.disabled = activeScreenshot <= 0;
+      elCarouselNext.disabled = activeScreenshot >= total - 1;
+      elScreenshotCounter.textContent = total > 0 ? `${activeScreenshot + 1} / ${total}` : '';
+    }
+
     function addScreenshot(url, filename) {
       screenshots.push({ url, filename });
 
@@ -709,24 +813,56 @@
       mainImg.src = screenshots[idx].url;
       mainImg.alt = screenshots[idx].filename;
 
-      // Update thumb active state
+      // Update thumb active state + scroll into view
       const thumbs = elScreenshotThumbs.querySelectorAll('.screenshot-thumb');
-      thumbs.forEach((t, i) => t.classList.toggle('active', i === idx));
+      thumbs.forEach((t, i) => {
+        t.classList.toggle('active', i === idx);
+        if (i === idx) t.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      });
+
+      updateCarouselControls();
     }
 
+    // Carousel arrow handlers
+    elCarouselPrev.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (activeScreenshot > 0) setActiveScreenshot(activeScreenshot - 1);
+    });
+    elCarouselNext.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (activeScreenshot < screenshots.length - 1) setActiveScreenshot(activeScreenshot + 1);
+    });
+
+    // Keyboard navigation for carousel
+    document.addEventListener('keydown', (e) => {
+      if (elLightbox.classList.contains('open')) {
+        if (e.key === 'Escape') elLightbox.classList.remove('open');
+        if (e.key === 'ArrowLeft' && activeScreenshot > 0) {
+          setActiveScreenshot(activeScreenshot - 1);
+          elLightboxImg.src = screenshots[activeScreenshot].url;
+        }
+        if (e.key === 'ArrowRight' && activeScreenshot < screenshots.length - 1) {
+          setActiveScreenshot(activeScreenshot + 1);
+          elLightboxImg.src = screenshots[activeScreenshot].url;
+        }
+        return;
+      }
+      // Arrow keys navigate carousel when not in lightbox
+      if (document.activeElement === document.body || document.activeElement === null) {
+        if (e.key === 'ArrowLeft' && activeScreenshot > 0) setActiveScreenshot(activeScreenshot - 1);
+        if (e.key === 'ArrowRight' && activeScreenshot < screenshots.length - 1) setActiveScreenshot(activeScreenshot + 1);
+      }
+    });
+
     // Lightbox
-    elScreenshotMain.addEventListener('click', () => {
+    elScreenshotMain.addEventListener('click', (e) => {
+      if (e.target.closest('.carousel-arrow')) return;
       if (activeScreenshot < 0) return;
       elLightboxImg.src = screenshots[activeScreenshot].url;
       elLightbox.classList.add('open');
     });
     elLightbox.addEventListener('click', (e) => {
       if (e.target !== elLightboxImg) elLightbox.classList.remove('open');
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && elLightbox.classList.contains('open')) {
-        elLightbox.classList.remove('open');
-      }
     });
 
     // --- CoT stream ---
@@ -832,7 +968,7 @@
         // Show error in CoT
         clearCotPlaceholder();
         const div = document.createElement('div');
-        div.style.cssText = 'color: #ef4444; margin: 8px 0;';
+        div.style.cssText = 'color: #c41e3a; margin: 6px 0;';
         div.textContent = `错误: ${ev.error || '未知错误'}`;
         elCotStream.appendChild(div);
       }
@@ -972,6 +1108,33 @@
         elRetryBtn.disabled = false;
         elRetryBtn.textContent = '重新走查';
         alert(err.message || '提交失败，请重试');
+      }
+    });
+
+    // --- Abort ---
+    elAbortBtn.addEventListener('click', async () => {
+      if (!confirm('确定要中断当前走查吗？')) return;
+      elAbortBtn.disabled = true;
+      elAbortBtn.textContent = '中断中...';
+      try {
+        const configRes = await fetch('/api/config');
+        const { supabaseUrl, supabaseAnonKey } = await configRes.json();
+        const sb = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+        const { data: { session } } = await sb.auth.getSession();
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (session) headers['Authorization'] = `Bearer ${session.access_token}`;
+
+        const res = await fetch(`/jobs/${jobId}/abort`, { method: 'POST', headers });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || '中断失败');
+        }
+        // SSE/Realtime will handle the status update
+      } catch (err) {
+        elAbortBtn.disabled = false;
+        elAbortBtn.textContent = '中断走查';
+        alert(err.message || '中断失败，请重试');
       }
     });
 

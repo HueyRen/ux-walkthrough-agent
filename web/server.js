@@ -118,6 +118,30 @@ async function main() {
     }
   });
 
+  // POST /jobs/:id/abort — abort a running job
+  app.post('/jobs/:id/abort', authMiddleware, async (req, res) => {
+    try {
+      const job = await getJob(req.params.id);
+      if (!job) return res.status(404).json({ error: '任务不存在' });
+      if (job.status !== 'running' && job.status !== 'queued') {
+        return res.status(400).json({ error: '任务不在可中断状态' });
+      }
+
+      const aborted = worker.abort(req.params.id);
+      if (!aborted) {
+        await updateJob(req.params.id, {
+          status: 'failed',
+          error_msg: '手动中断',
+          completed_at: new Date().toISOString(),
+        });
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('POST /jobs/:id/abort error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // GET /jobs/:id → status page
   app.get('/jobs/:id', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'status.html'));
