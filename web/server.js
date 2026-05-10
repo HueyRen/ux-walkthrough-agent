@@ -67,7 +67,7 @@ async function main() {
 
       const jobId = crypto.randomBytes(3).toString('hex');
 
-      const { stations } = await writeConfigs(projectRoot, jobId, {
+      await writeConfigs(projectRoot, jobId, {
         ...req.body,
         submitter: req.userEmail,
       });
@@ -78,7 +78,13 @@ async function main() {
         personas,
         rules,
         model,
-        plan: { stations, user_prompt: '' },
+        plan: { stations: [], generating: true, user_prompt: '' },
+      });
+
+      // Generate plan asynchronously (does not block response)
+      const { generatePlan } = require('./planner');
+      generatePlan(projectRoot, jobId, req.body).catch((err) => {
+        console.error(`Plan generation failed for ${jobId}:`, err);
       });
 
       res.json({ jobId, statusUrl: `/jobs/${jobId}` });

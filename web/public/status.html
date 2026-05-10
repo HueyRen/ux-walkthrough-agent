@@ -484,6 +484,8 @@
     .abort-btn:hover { background: #fef5f5; border-color: #e09aa3; }
     .abort-btn:disabled { color: #ccc; border-color: #e4e6ea; cursor: not-allowed; background: #fafbfc; }
 
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     /* Plan confirmation UI */
     .plan-station-list { list-style: none; margin: 0 0 16px; }
     .plan-station-item {
@@ -590,8 +592,14 @@
         </div>
         <span class="status-badge planning" id="plan-status-badge">待确认</span>
       </div>
+      <div id="plan-generating" style="display:none; text-align:center; padding:32px 0;">
+        <div style="width:28px;height:28px;border:3px solid #e5e5e5;border-top-color:#4a90d9;
+             border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto;"></div>
+        <p style="color:#555;margin-top:12px;font-size:14px;">AI 正在分析目标网站，生成走查计划...</p>
+        <p style="color:#999;font-size:12px;margin-top:4px;">通常需要 10-15 秒</p>
+      </div>
       <ul class="plan-station-list" id="plan-station-list"></ul>
-      <div class="plan-prompt-label">还有什么想补充的？</div>
+      <div class="plan-prompt-label" id="plan-prompt-label">还有什么想补充的？</div>
       <textarea class="plan-prompt-textarea" id="plan-prompt"
         placeholder="如：重点关注搜索体验和筛选器、以移动端视角评估…" rows="3"></textarea>
       <button class="confirm-btn" id="confirm-btn">确认并开始走查 →</button>
@@ -693,17 +701,7 @@
       return `${Math.floor(hrs / 24)} 天前`;
     }
 
-    const STATIONS = [
-      { id: 'S1', name: '首页着陆' },
-      { id: 'S2', name: '搜索标准品' },
-      { id: 'S3', name: '标准品详情页' },
-      { id: 'S4', name: '搜索轻定制' },
-      { id: 'S5', name: '轻定制详情页' },
-      { id: 'S6', name: '搜索重定制' },
-      { id: 'S7', name: '重定制详情页' },
-      { id: 'S8', name: '沟通询盘流程' },
-      { id: 'S9', name: 'Manufacturers Tab' },
-    ];
+    let STATIONS = []; // populated dynamically from job.plan.stations
 
     const pathParts = window.location.pathname.split('/').filter(Boolean);
     const jobId = pathParts[pathParts.length - 1];
@@ -725,7 +723,7 @@
     let activePersona = null;
     let allPersonas = []; // populated from job.personas on init
 
-    STATIONS.forEach(s => { stationState[s.id] = { status: 'pending', issues: 0 }; });
+    // stationState is initialized when STATIONS is populated from job data
 
     // DOM refs
     const elSite = document.getElementById('job-site');
@@ -1285,6 +1283,32 @@
       };
     }
 
+    // --- Plan station rendering ---
+    function renderPlanStations(stations, isFallback) {
+      document.getElementById('plan-generating').style.display = 'none';
+      const planList = document.getElementById('plan-station-list');
+      planList.style.display = '';
+      planList.innerHTML = '';
+
+      if (isFallback) {
+        const warn = document.createElement('li');
+        warn.style.cssText = 'color:#b45309;font-size:12px;padding:8px;background:#fffbeb;border-radius:6px;margin-bottom:8px;';
+        warn.textContent = '计划自动生成失败，已使用默认模板';
+        planList.appendChild(warn);
+      }
+
+      stations.forEach(s => {
+        const li = document.createElement('li');
+        li.className = 'plan-station-item';
+        li.innerHTML = `<span class="plan-station-id">${s.id}</span><span class="plan-station-name">${s.name}</span>`;
+        planList.appendChild(li);
+      });
+
+      document.getElementById('confirm-btn').style.display = '';
+      document.getElementById('plan-prompt-label').style.display = '';
+      document.getElementById('plan-prompt').style.display = '';
+    }
+
     // --- Plan confirmation ---
     document.getElementById('confirm-btn').addEventListener('click', async () => {
       const btn = document.getElementById('confirm-btn');
@@ -1475,15 +1499,33 @@
           document.getElementById('plan-job-id').textContent = job.id;
           document.getElementById('plan-job-time').textContent = timeAgo(job.created_at);
 
-          const planList = document.getElementById('plan-station-list');
-          const stations = job.plan?.stations || STATIONS;
-          planList.innerHTML = '';
-          stations.forEach(s => {
-            const li = document.createElement('li');
-            li.className = 'plan-station-item';
-            li.innerHTML = `<span class="plan-station-id">${s.id}</span><span class="plan-station-name">${s.name}</span>`;
-            planList.appendChild(li);
-          });
+          if (job.plan?.generating) {
+            // Plan is being generated — show spinner, hide station list + confirm
+            document.getElementById('plan-generating').style.display = 'block';
+            document.getElementById('plan-station-list').style.display = 'none';
+            document.getElementById('confirm-btn').style.display = 'none';
+            document.getElementById('plan-prompt-label').style.display = 'none';
+            document.getElementById('plan-prompt').style.display = 'none';
+
+            // Poll every 2s until plan is ready
+            const pollId = setInterval(async () => {
+              try {
+                const r = await fetch(`/api/jobs/${jobId}`);
+                const j = await r.json();
+                if (!j.plan?.generating) {
+                  clearInterval(pollId);
+                  STATIONS = j.plan?.stations || [];
+                  STATIONS.forEach(s => { stationState[s.id] = { status: 'pending', issues: 0 }; });
+                  renderPlanStations(STATIONS, j.plan?.generated === false);
+                }
+              } catch (_) {}
+            }, 2000);
+          } else {
+            // Plan already generated — show stations
+            STATIONS = job.plan?.stations || [];
+            STATIONS.forEach(s => { stationState[s.id] = { status: 'pending', issues: 0 }; });
+            renderPlanStations(STATIONS, job.plan?.generated === false);
+          }
 
           connectRealtime();
         } else {
@@ -1494,6 +1536,10 @@
           elTime.textContent = timeAgo(job.created_at);
           setStatusBadge(job.status);
           totalIssues = job.issue_count || 0;
+
+          // Populate STATIONS from job plan
+          STATIONS = job.plan?.stations || [];
+          STATIONS.forEach(s => { stationState[s.id] = { status: 'pending', issues: 0 }; });
 
           // Initialize per-persona state if multiple personas
           allPersonas = job.personas || [];

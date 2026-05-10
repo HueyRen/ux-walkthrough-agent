@@ -22,12 +22,7 @@ function writeConfigs(projectRoot, jobId, {
   const filteredPersonas = filterPersonas(rawPersonas, personas);
   fs.writeFileSync(path.join(dest, 'personas.md'), filteredPersonas, 'utf8');
 
-  // 3. task_card_01_core.md → task_card.md
-  const taskCardContent = fs.readFileSync(path.join(src, 'task_card_01_core.md'), 'utf8');
-  fs.writeFileSync(path.join(dest, 'task_card.md'), taskCardContent, 'utf8');
-
-  // Parse stations for plan display
-  const stations = parseStations(taskCardContent);
+  // 3. task_card.md — generated async by planner.js (not copied here)
 
   // 4. config.md
   const configLines = [
@@ -60,7 +55,7 @@ function writeConfigs(projectRoot, jobId, {
 
   fs.writeFileSync(path.join(dest, 'config.md'), config, 'utf8');
 
-  return { stations };
+  return {};
 }
 
 function filterPersonas(raw, selectedFirstNames) {

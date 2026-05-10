@@ -144,7 +144,8 @@ async function runPersonaStations({
 
     // Update per-persona progress after each station
     const currentJob = await getJob(jobId);
-    const progress = currentJob.progress || { personas: {} };
+    const progress = currentJob.progress || {};
+    if (!progress.personas) progress.personas = {};
     progress.personas[personaName] = checker.toProgress();
     await updateJob(jobId, { progress });
   }
