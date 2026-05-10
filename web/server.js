@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const { initDb, createJob, getJob, updateJob, listJobs } = require('./db');
 const { writeConfigs } = require('./config-writer');
 const { supabaseAdmin, supabaseUrl, supabaseAnonKey } = require('./supabase');
+const { jobEmitter } = require('./emitter');
 
 const PORT = process.env.PORT || 3000;
 const projectRoot = path.resolve(__dirname, '..');
@@ -157,6 +158,106 @@ async function main() {
       res.status(500).json({ error: err.message });
     }
   });
+
+  // --- SSE streaming ---
+  const screenshotBuffers = new Map(); // jobId -> [{ url, filename }]
+
+  // Buffer screenshots globally for replay on SSE connect
+  jobEmitter.on('newListener', () => {}); // no-op, just to avoid warnings
+  const globalScreenshotListener = (jobId) => {
+    // This is set up per-job below via the route
+  };
+
+  // Fallback cleanup: scan every 60s for stale buffers
+  setInterval(async () => {
+    for (const [jid] of screenshotBuffers) {
+      try {
+        const job = await getJob(jid);
+        if (!job || ['done', 'failed', 'timeout'].includes(job.status)) {
+          screenshotBuffers.delete(jid);
+        }
+      } catch (_) {
+        screenshotBuffers.delete(jid);
+      }
+    }
+  }, 60_000);
+
+  // GET /api/jobs/:id/stream — SSE endpoint
+  app.get('/api/jobs/:id/stream', async (req, res) => {
+    const jid = req.params.id;
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    // Check if job is already terminal
+    try {
+      const job = await getJob(jid);
+      if (job && ['done', 'failed', 'timeout'].includes(job.status)) {
+        const termEvent = job.status === 'done'
+          ? { type: 'done', status: job.status, reportUrl: job.report_url || `/reports/${jid}` }
+          : { type: 'failed', error: job.error_msg || 'Unknown error' };
+        res.write(`data: ${JSON.stringify(termEvent)}\n\n`);
+        res.end();
+        return;
+      }
+    } catch (_) {}
+
+    // Flush buffered screenshots
+    const buffered = screenshotBuffers.get(jid) || [];
+    for (const ss of buffered) {
+      res.write(`data: ${JSON.stringify(ss)}\n\n`);
+    }
+
+    // Subscribe to live events (buffering handled by global emit override)
+    const listener = (ev) => {
+      try {
+        res.write(`data: ${JSON.stringify(ev)}\n\n`);
+      } catch (_) {}
+    };
+
+    jobEmitter.on(`job:${jid}`, listener);
+
+    // Keepalive ping every 15s
+    const pingInterval = setInterval(() => {
+      try {
+        res.write(`data: ${JSON.stringify({ type: 'ping' })}\n\n`);
+      } catch (_) {
+        clearInterval(pingInterval);
+      }
+    }, 15_000);
+
+    // Cleanup on disconnect
+    req.on('close', () => {
+      jobEmitter.removeListener(`job:${jid}`, listener);
+      clearInterval(pingInterval);
+    });
+  });
+
+  // Also buffer screenshots from the global emitter (for clients connecting later)
+  // We need to capture screenshots even before any SSE client connects
+  const globalBuffer = (jid, ev) => {
+    if (ev.type === 'screenshot') {
+      if (!screenshotBuffers.has(jid)) screenshotBuffers.set(jid, []);
+      screenshotBuffers.get(jid).push(ev);
+    }
+    if (ev.type === 'done' || ev.type === 'failed') {
+      // Keep buffer for 30s after completion for late connectors, then clean
+      setTimeout(() => screenshotBuffers.delete(jid), 30_000);
+    }
+  };
+  // Use a wildcard-style approach: listen for any event that starts with 'job:'
+  const origEmit = jobEmitter.emit.bind(jobEmitter);
+  jobEmitter.emit = function (event, ...args) {
+    if (typeof event === 'string' && event.startsWith('job:') && args[0]?.type) {
+      const jid = event.replace('job:', '');
+      globalBuffer(jid, args[0]);
+    }
+    return origEmit(event, ...args);
+  };
 
   // GET /api/jobs/:id — JSON single job
   app.get('/api/jobs/:id', async (req, res) => {

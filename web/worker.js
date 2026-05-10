@@ -1,6 +1,6 @@
 'use strict';
 
-const { generateText } = require('ai');
+const { streamText, stepCountIs } = require('ai');
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -9,6 +9,7 @@ const { getJob, updateJob } = require('./db');
 const { WalkthroughChecker } = require('./checker');
 const { createPlaywrightTools } = require('./tools');
 const { supabaseAdmin } = require('./supabase');
+const { jobEmitter } = require('./emitter');
 
 function createWorker(projectRoot) {
   let queue;
@@ -66,7 +67,8 @@ async function runJob(jobId, projectRoot) {
     const { tools, newContext, closeContext } = createPlaywrightTools(
       browser,
       jobId,
-      supabaseAdmin
+      supabaseAdmin,
+      jobEmitter
     );
 
     const checker = new WalkthroughChecker(stations);
@@ -78,6 +80,12 @@ async function runJob(jobId, projectRoot) {
       checker.setCurrent(station.id);
       await updateJob(jobId, { progress: checker.toProgress() });
 
+      jobEmitter.emit(`job:${jobId}`, {
+        type: 'station-change',
+        stationId: station.id,
+        stationName: station.name,
+      });
+
       await newContext();
 
       let retryCount = 0;
@@ -87,14 +95,27 @@ async function runJob(jobId, projectRoot) {
         try {
           const stationPrompt = buildStationPrompt(station, personasDoc, job);
 
-          await generateText({
+          const result = streamText({
             model,
             system: fullSystemPrompt,
             prompt: stationPrompt,
             tools,
-            maxSteps: 50,
+            stopWhen: stepCountIs(50),
             maxTokens: 4096,
           });
+
+          // Consume the stream and emit events
+          for await (const chunk of result.fullStream) {
+            if (chunk.type === 'text-delta') {
+              jobEmitter.emit(`job:${jobId}`, { type: 'cot', delta: chunk.textDelta });
+            } else if (chunk.type === 'tool-call') {
+              jobEmitter.emit(`job:${jobId}`, {
+                type: 'tool-call',
+                toolName: chunk.toolName,
+                args: chunk.args,
+              });
+            }
+          }
 
           checker.recordComplete(station.id);
           stationDone = true;
@@ -120,11 +141,14 @@ async function runJob(jobId, projectRoot) {
 
     // Final status
     const finalStatus = checker.finalStatus();
+    const reportUrl = `/reports/${jobId}`;
     await updateJob(jobId, {
       status: finalStatus,
       completed_at: new Date().toISOString(),
-      report_url: `/reports/${jobId}`,
+      report_url: reportUrl,
     });
+
+    jobEmitter.emit(`job:${jobId}`, { type: 'done', status: finalStatus, reportUrl });
 
     await browser.close();
   } catch (err) {
@@ -133,6 +157,7 @@ async function runJob(jobId, projectRoot) {
       status: 'failed',
       error_msg: err.message,
     }).catch(() => {});
+    jobEmitter.emit(`job:${jobId}`, { type: 'failed', error: err.message });
   }
 }
 

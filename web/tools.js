@@ -3,9 +3,10 @@
 const { tool, zodSchema } = require('ai');
 const { z } = require('zod');
 
-function createPlaywrightTools(browser, jobId, supabaseAdmin) {
+function createPlaywrightTools(browser, jobId, supabaseAdmin, jobEmitter) {
   let context = null;
   let page = null;
+  const screenshotUrls = new Map();
 
   async function newContext() {
     context = await browser.newContext({
@@ -109,7 +110,14 @@ function createPlaywrightTools(browser, jobId, supabaseAdmin) {
           .from('screenshots')
           .getPublicUrl(storagePath);
 
-        return { filename, storageUrl: urlData.publicUrl };
+        const publicUrl = urlData.publicUrl;
+        screenshotUrls.set(filename, publicUrl);
+
+        if (jobEmitter) {
+          jobEmitter.emit(`job:${jobId}`, { type: 'screenshot', url: publicUrl, filename });
+        }
+
+        return { filename, storageUrl: publicUrl };
       },
     }),
 
@@ -148,6 +156,10 @@ function createPlaywrightTools(browser, jobId, supabaseAdmin) {
         ai_opportunity: z.string().optional().describe('Whether AI could improve this'),
       })),
       execute: async (issue) => {
+        // Resolve screenshot filename to real storage URL
+        const screenshotUrl = screenshotUrls.get(issue.screenshot)
+          || `${supabaseAdmin.storageUrl || ''}/storage/v1/object/public/screenshots/${jobId}/${issue.screenshot}`;
+
         const { error } = await supabaseAdmin.from('findings').insert({
           id: issue.id,
           job_id: jobId,
@@ -156,12 +168,23 @@ function createPlaywrightTools(browser, jobId, supabaseAdmin) {
           severity: issue.severity,
           classification: issue.classification,
           description: issue.description,
-          screenshot_url: issue.screenshot,
+          screenshot_url: screenshotUrl,
           raw_data: issue,
         });
         if (error) throw new Error(`recordIssue failed: ${error.message}`);
 
         await supabaseAdmin.rpc('increment_issue_count', { job_id: jobId });
+
+        if (jobEmitter) {
+          jobEmitter.emit(`job:${jobId}`, {
+            type: 'issue',
+            id: issue.id,
+            title: issue.title,
+            severity: issue.severity,
+            station: issue.station,
+            persona: issue.personas_affected.join(', '),
+          });
+        }
 
         return { recorded: true, id: issue.id };
       },

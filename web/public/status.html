@@ -12,26 +12,28 @@
       background: #f5f5f5;
       color: #333;
       min-height: 100vh;
-      padding: 32px 16px;
     }
 
-    .container {
-      max-width: 560px;
-      margin: 0 auto;
-    }
-
-    .nav-links {
-      margin-bottom: 16px;
+    /* Top nav */
+    .top-nav {
+      padding: 12px 16px;
       font-size: 13px;
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
     }
-
-    .nav-links a {
+    .top-nav a {
       color: #1a73e8;
       text-decoration: none;
       margin-right: 16px;
     }
+    .top-nav a:hover { text-decoration: underline; }
 
-    .nav-links a:hover { text-decoration: underline; }
+    /* === Planning state: single-column centered === */
+    .planning-layout {
+      max-width: 560px;
+      margin: 32px auto;
+      padding: 0 16px;
+    }
 
     .card {
       background: #ffffff;
@@ -41,257 +43,381 @@
       margin-bottom: 16px;
     }
 
+    /* === Execution state: split-panel === */
+    .monitor-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 16px;
+      height: calc(100vh - 49px);
+      padding: 16px;
+    }
+
+    @media (max-width: 1024px) {
+      .monitor-grid { grid-template-columns: 240px 1fr; }
+    }
+
+    /* Left panel */
+    .left-panel {
+      background: #fff;
+      border: 1px solid #d0d0d0;
+      border-radius: 10px;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Right panel */
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+    }
+
     /* Job header */
     .job-header {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 20px;
+      gap: 8px;
+      margin-bottom: 16px;
     }
-
-    .job-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #333;
-      margin-bottom: 4px;
-    }
-
-    .job-meta {
-      font-size: 12px;
-      color: #999;
-      font-family: monospace;
-    }
-
-    .job-meta span { margin-right: 10px; }
+    .job-title { font-size: 15px; font-weight: 600; color: #333; }
+    .job-meta { font-size: 11px; color: #999; font-family: monospace; margin-top: 4px; }
+    .job-meta span { margin-right: 8px; }
 
     /* Status badges */
     .status-badge {
       display: inline-block;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 500;
-      padding: 3px 10px;
+      padding: 2px 10px;
       border-radius: 12px;
       white-space: nowrap;
     }
     .status-badge.planning { background: #e8f0fe; color: #1a73e8; }
-    .status-badge.queued  { background: #e2e3e5; color: #383d41; }
-    .status-badge.running { background: #fff3cd; color: #856404; }
-    .status-badge.done    { background: #d4edda; color: #155724; }
-    .status-badge.failed  { background: #f8d7da; color: #721c24; }
-    .status-badge.timeout { background: #fff3cd; color: #856404; }
-    .status-badge.partial { background: #fff3cd; color: #856404; }
+    .status-badge.queued   { background: #e2e3e5; color: #383d41; }
+    .status-badge.running  { background: #fff3cd; color: #856404; }
+    .status-badge.done     { background: #d4edda; color: #155724; }
+    .status-badge.failed   { background: #f8d7da; color: #721c24; }
+    .status-badge.timeout  { background: #fff3cd; color: #856404; }
+    .status-badge.partial  { background: #fff3cd; color: #856404; }
 
     /* Progress bar */
-    .progress-wrap {
-      margin-bottom: 8px;
-    }
-
+    .progress-wrap { margin-bottom: 4px; }
     .progress-bar-track {
       background: #e9ecef;
       border-radius: 3px;
       height: 6px;
       overflow: hidden;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
-
     .progress-bar-fill {
       height: 100%;
       background: #1a73e8;
       border-radius: 3px;
-      transition: width 0.4s ease;
+      transition: width 0.4s ease, background-color 0.3s ease;
       width: 0%;
     }
+    .progress-bar-fill.done-flash { background: #28a745; }
+    .progress-label { font-size: 11px; color: #888; }
 
-    .progress-label {
+    /* Current station label */
+    .current-station-label {
       font-size: 12px;
-      color: #888;
+      color: #1a73e8;
+      font-weight: 500;
+      margin: 8px 0;
+      min-height: 18px;
     }
 
     /* Station list */
-    .station-list {
-      list-style: none;
-      margin-top: 20px;
-    }
-
+    .station-list { list-style: none; flex: 1; }
     .station-item {
       display: flex;
       align-items: center;
-      padding: 9px 0;
+      padding: 6px 0;
       border-bottom: 1px solid #f0f0f0;
-      font-size: 14px;
+      font-size: 13px;
     }
-
     .station-item:last-child { border-bottom: none; }
-
-    .station-icon {
-      width: 22px;
-      font-size: 14px;
-      flex-shrink: 0;
-    }
-
+    .station-icon { width: 20px; font-size: 13px; flex-shrink: 0; }
     .station-icon.done    { color: #28a745; }
     .station-icon.current { color: #1a73e8; }
     .station-icon.pending { color: #ccc; }
-
-    .station-name {
-      flex: 1;
-      color: #333;
-    }
-
+    .station-name { flex: 1; color: #333; }
     .station-name.pending { color: #aaa; }
     .station-name.current { font-weight: 600; }
-
-    .station-right {
-      font-size: 12px;
-      color: #888;
-      margin-left: 8px;
-    }
-
+    .station-right { font-size: 11px; color: #888; margin-left: 6px; }
     .station-right.current-label { color: #1a73e8; }
-
-    /* Screenshots */
-    .screenshots-section {
-      margin-top: 20px;
-    }
-
-    .screenshots-label {
-      font-size: 13px;
-      font-weight: 500;
-      color: #555;
-      margin-bottom: 10px;
-    }
-
-    .screenshot-thumbs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .screenshot-thumb {
-      width: 80px;
-      height: 54px;
-      background: #f0f0f0;
-      border: 1px solid #d0d0d0;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      color: #888;
-      text-align: center;
-      overflow: hidden;
-      cursor: default;
-      position: relative;
-    }
-
-    .screenshot-thumb img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    .screenshot-thumb .thumb-label {
-      padding: 3px;
-      line-height: 1.3;
-    }
 
     /* Download button */
     .download-btn {
       display: inline-block;
-      margin-top: 20px;
-      padding: 10px 24px;
+      margin-top: 16px;
+      padding: 10px 20px;
       background: #28a745;
       color: #fff;
       border-radius: 6px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
       text-decoration: none;
-      transition: background 0.15s;
+      transition: background 0.15s, transform 0.3s ease;
+    }
+    .download-btn:hover { background: #1e8035; }
+    .download-btn.slide-up {
+      animation: slideUp 0.4s ease forwards;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
-    .download-btn:hover { background: #1e8035; }
+    /* === Screenshot viewer === */
+    .screenshot-area {
+      height: clamp(220px, 40vh, 480px);
+      background: #0a0a0a;
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .screenshot-label {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 10px;
+      color: #555;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .screenshot-main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      cursor: zoom-in;
+    }
+    .screenshot-main img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .screenshot-main:hover { outline: 2px solid #1a73e8; outline-offset: -2px; }
+    .screenshot-placeholder {
+      color: #555;
+      font-size: 14px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50%      { opacity: 1; }
+    }
+    .screenshot-thumbs {
+      display: flex;
+      gap: 4px;
+      padding: 6px 8px;
+      overflow-x: auto;
+      background: #111;
+      flex-shrink: 0;
+    }
+    .screenshot-thumb {
+      width: 96px;
+      height: 64px;
+      flex-shrink: 0;
+      border-radius: 4px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 2px solid transparent;
+      opacity: 0.7;
+      transition: opacity 0.15s, border-color 0.15s;
+    }
+    .screenshot-thumb.active {
+      border-color: #1a73e8;
+      opacity: 1;
+    }
+    .screenshot-thumb:hover { opacity: 1; }
+    .screenshot-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
 
-    /* Error state */
+    /* Lightbox */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .lightbox.open { display: flex; }
+    .lightbox img {
+      max-width: 95vw;
+      max-height: 95vh;
+      object-fit: contain;
+      cursor: default;
+    }
+
+    /* === CoT stream === */
+    .cot-area {
+      flex: 1;
+      min-height: 200px;
+      background: #111;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .cot-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #737373;
+      border-bottom: 1px solid #262626;
+      flex-shrink: 0;
+    }
+    .heartbeat {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #28a745;
+      animation: heartbeat 2s ease-in-out infinite;
+    }
+    .heartbeat.warning { background: #eab308; animation: none; }
+    @keyframes heartbeat {
+      0%, 100% { opacity: 0.4; }
+      50%      { opacity: 1; }
+    }
+    .cot-stream {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #999;
+      line-height: 1.5;
+    }
+    .cot-placeholder {
+      color: #555;
+      font-style: italic;
+    }
+    .cot-placeholder .cursor {
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0; }
+    }
+
+    /* CoT content types */
+    .cot-tool-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #1a2332;
+      border: 1px solid #2a3a4a;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      color: #7eb8f0;
+      margin: 2px 0;
+    }
+    .cot-tool-pill .tool-name { font-weight: 500; }
+    .cot-station-divider {
+      text-align: center;
+      color: #666;
+      border-top: 1px solid #333;
+      margin: 12px 0;
+      padding-top: 8px;
+      font-size: 12px;
+    }
+    .cot-issue-card {
+      background: #1a1a1a;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin: 6px 0;
+      border-left: 3px solid #6b7280;
+    }
+    .cot-issue-card.p0 { border-left-color: #ef4444; }
+    .cot-issue-card.p1 { border-left-color: #f97316; }
+    .cot-issue-card.p2 { border-left-color: #eab308; }
+    .cot-issue-card.p3 { border-left-color: #6b7280; }
+    .cot-issue-card .issue-title { color: #fff; font-size: 13px; font-weight: 500; }
+    .cot-issue-card .issue-meta { color: #aaa; font-size: 11px; margin-top: 2px; }
+
+    /* SSE reconnect bar */
+    .reconnect-bar {
+      display: none;
+      padding: 6px 12px;
+      background: #78350f;
+      color: #fbbf24;
+      font-size: 12px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .reconnect-bar.show { display: block; }
+
+    /* CoT done divider */
+    .cot-done-divider {
+      text-align: center;
+      color: #28a745;
+      border-top: 1px solid #28a745;
+      margin: 12px 0;
+      padding-top: 8px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* Error card */
     .error-card {
       background: #fff8f8;
       border: 1px solid #f5c6cb;
       border-radius: 10px;
-      padding: 20px 24px;
-      margin-top: 16px;
+      padding: 16px 20px;
+      margin-top: 12px;
       display: none;
     }
-
-    .error-card .error-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #721c24;
-      margin-bottom: 6px;
-    }
-
-    .error-card .error-detail {
-      font-size: 13px;
-      color: #856060;
-      margin-bottom: 14px;
-      line-height: 1.5;
-    }
+    .error-card .error-title { font-size: 13px; font-weight: 600; color: #721c24; margin-bottom: 4px; }
+    .error-card .error-detail { font-size: 12px; color: #856060; margin-bottom: 10px; line-height: 1.5; }
 
     .retry-btn {
-      padding: 8px 18px;
+      padding: 7px 16px;
       background: #dc3545;
       color: #fff;
       border: none;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 12px;
       font-family: inherit;
       cursor: pointer;
-      transition: background 0.15s;
     }
-
     .retry-btn:hover { background: #b02a37; }
     .retry-btn:disabled { background: #ccc; cursor: not-allowed; }
 
     /* Plan confirmation UI */
-    .plan-section {
-      margin-top: 16px;
-    }
-
-    .plan-station-list {
-      list-style: none;
-      margin: 0 0 20px;
-    }
-
+    .plan-station-list { list-style: none; margin: 0 0 16px; }
     .plan-station-item {
       display: flex;
       align-items: center;
-      padding: 8px 0;
+      padding: 7px 0;
       border-bottom: 1px solid #f0f0f0;
       font-size: 14px;
     }
-
     .plan-station-item:last-child { border-bottom: none; }
-
-    .plan-station-id {
-      width: 32px;
-      font-size: 12px;
-      color: #999;
-      font-family: monospace;
-      flex-shrink: 0;
-    }
-
-    .plan-station-name {
-      color: #333;
-    }
-
-    .plan-prompt-label {
-      font-size: 13px;
-      font-weight: 500;
-      color: #555;
-      margin-bottom: 6px;
-    }
-
+    .plan-station-id { width: 32px; font-size: 12px; color: #999; font-family: monospace; flex-shrink: 0; }
+    .plan-station-name { color: #333; }
+    .plan-prompt-label { font-size: 13px; font-weight: 500; color: #555; margin-bottom: 6px; }
     .plan-prompt-textarea {
       width: 100%;
       padding: 10px 12px;
@@ -303,17 +429,9 @@
       resize: vertical;
       min-height: 72px;
       outline: none;
-      transition: border-color 0.15s;
     }
-
-    .plan-prompt-textarea:focus {
-      border-color: #4a90d9;
-    }
-
-    .plan-prompt-textarea::placeholder {
-      color: #aaa;
-    }
-
+    .plan-prompt-textarea:focus { border-color: #4a90d9; }
+    .plan-prompt-textarea::placeholder { color: #aaa; }
     .confirm-btn {
       width: 100%;
       padding: 11px;
@@ -325,81 +443,118 @@
       font-weight: 500;
       font-family: inherit;
       cursor: pointer;
-      transition: background 0.15s;
       margin-top: 16px;
     }
-
     .confirm-btn:hover { background: #1558c0; }
     .confirm-btn:disabled { background: #a0c0f0; cursor: not-allowed; }
 
-    @media (max-width: 600px) {
-      .card { padding: 20px 16px; }
-      .job-header { flex-direction: column; }
+    /* Mobile */
+    @media (max-width: 800px) {
+      .monitor-grid {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: 100vh;
+      }
+      .left-panel { order: 0; }
+      .right-panel { order: 1; }
+      .screenshot-area { height: clamp(180px, 30vh, 280px); }
+      .cot-area { max-height: 40vh; }
+      .screenshot-thumb { width: 64px; height: 44px; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="nav-links">
-      <a href="/">← 新建走查</a>
-      <a href="/jobs">走查历史</a>
-    </div>
+  <div class="top-nav">
+    <a href="/">← 新建走查</a>
+    <a href="/jobs">走查历史</a>
+  </div>
 
-    <!-- Main status card -->
+  <!-- Planning state: centered single-column -->
+  <div class="planning-layout" id="planning-layout" style="display:none">
     <div class="card">
+      <div class="job-header">
+        <div>
+          <div class="job-title" id="plan-job-site">—</div>
+          <div class="job-meta">
+            <span id="plan-job-id">—</span>
+            <span id="plan-job-time">—</span>
+          </div>
+        </div>
+        <span class="status-badge planning" id="plan-status-badge">待确认</span>
+      </div>
+      <ul class="plan-station-list" id="plan-station-list"></ul>
+      <div class="plan-prompt-label">还有什么想补充的？</div>
+      <textarea class="plan-prompt-textarea" id="plan-prompt"
+        placeholder="如：重点关注搜索体验和筛选器、以移动端视角评估…" rows="3"></textarea>
+      <button class="confirm-btn" id="confirm-btn">确认并开始走查 →</button>
+    </div>
+  </div>
+
+  <!-- Execution state: split-panel -->
+  <div class="monitor-grid" id="monitor-grid" style="display:none">
+    <!-- Left panel -->
+    <div class="left-panel">
       <div class="job-header">
         <div>
           <div class="job-title" id="job-site">—</div>
           <div class="job-meta">
             <span id="job-id-display">—</span>
-            <span id="job-submitter">—</span>
             <span id="job-time">—</span>
           </div>
         </div>
-        <span class="status-badge queued" id="status-badge">排队中</span>
+        <span class="status-badge queued" id="status-badge" aria-label="状态: 排队中">排队中</span>
       </div>
 
-      <!-- Plan confirmation view (shown when status=planning) -->
-      <div class="plan-section" id="plan-section" style="display:none">
-        <ul class="plan-station-list" id="plan-station-list"></ul>
-        <div class="plan-prompt-label">还有什么想补充的？</div>
-        <textarea
-          class="plan-prompt-textarea"
-          id="plan-prompt"
-          placeholder="如：重点关注搜索体验和筛选器、以移动端视角评估…"
-          rows="3"
-        ></textarea>
-        <button class="confirm-btn" id="confirm-btn">确认并开始走查 →</button>
+      <div class="progress-wrap">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-bar"></div>
+        </div>
+        <div class="progress-label" id="progress-label">等待开始...</div>
       </div>
 
-      <!-- Execution progress view (shown when status != planning) -->
-      <div id="execution-section">
-        <div class="progress-wrap">
-          <div class="progress-bar-track">
-            <div class="progress-bar-fill" id="progress-bar"></div>
-          </div>
-          <div class="progress-label" id="progress-label">等待开始...</div>
-        </div>
+      <div class="current-station-label" id="current-station-label"></div>
 
-        <ul class="station-list" id="station-list"></ul>
+      <ul class="station-list" id="station-list" role="list"></ul>
 
-        <div class="screenshots-section" id="screenshots-section" style="display:none">
-          <div class="screenshots-label">截图预览</div>
-          <div class="screenshot-thumbs" id="screenshot-thumbs"></div>
-        </div>
+      <div id="download-wrap" style="display:none">
+        <a id="download-btn" class="download-btn" href="#">下载 HTML 报告</a>
+      </div>
 
-        <div id="download-wrap" style="display:none">
-          <a id="download-btn" class="download-btn" href="#">下载 HTML 报告</a>
-        </div>
+      <div class="error-card" id="error-card">
+        <div class="error-title" id="error-title">走查失败</div>
+        <div class="error-detail" id="error-detail">发生了未知错误</div>
+        <button class="retry-btn" id="retry-btn">重新走查</button>
       </div>
     </div>
 
-    <!-- Error card -->
-    <div class="error-card" id="error-card">
-      <div class="error-title" id="error-title">走查失败</div>
-      <div class="error-detail" id="error-detail">发生了未知错误</div>
-      <button class="retry-btn" id="retry-btn">重新走查</button>
+    <!-- Right panel -->
+    <div class="right-panel">
+      <!-- Screenshot viewer -->
+      <div class="screenshot-area">
+        <span class="screenshot-label">最近截图</span>
+        <div class="screenshot-main" id="screenshot-main" role="tabpanel">
+          <span class="screenshot-placeholder" id="screenshot-placeholder">等待截图...</span>
+        </div>
+        <div class="screenshot-thumbs" id="screenshot-thumbs" role="tablist"></div>
+      </div>
+
+      <!-- CoT stream -->
+      <div class="cot-area">
+        <div class="cot-header">
+          <span>思维链</span>
+          <div class="heartbeat" id="heartbeat" title="连接状态"></div>
+        </div>
+        <div class="reconnect-bar" id="reconnect-bar">连接断开，正在重连...</div>
+        <div class="cot-stream" id="cot-stream" role="log" aria-live="polite">
+          <span class="cot-placeholder" id="cot-placeholder">正在启动浏览器...<span class="cursor">▌</span></span>
+        </div>
+      </div>
     </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" aria-modal="true">
+    <img id="lightbox-img" src="" alt="截图放大">
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -417,38 +572,49 @@
       { id: 'S9', name: 'Manufacturers Tab' },
     ];
 
-    // Parse job ID from URL path /jobs/:id
     const pathParts = window.location.pathname.split('/').filter(Boolean);
     const jobId = pathParts[pathParts.length - 1];
 
     // State
     let jobData = null;
-    let stationState = {}; // stationId -> { status: 'done'|'current'|'pending', issues: 0 }
+    let stationState = {};
     let totalIssues = 0;
     let completedStations = 0;
-    // Initialize station state
-    STATIONS.forEach(s => {
-      stationState[s.id] = { status: 'pending', issues: 0 };
-    });
+    let screenshots = []; // { url, filename }
+    let activeScreenshot = -1;
+    let cotPlaceholderCleared = false;
+    let autoScroll = true;
+    let lastPingTime = Date.now();
+    let sse = null;
+
+    STATIONS.forEach(s => { stationState[s.id] = { status: 'pending', issues: 0 }; });
 
     // DOM refs
     const elSite = document.getElementById('job-site');
     const elJobId = document.getElementById('job-id-display');
-    const elSubmitter = document.getElementById('job-submitter');
     const elTime = document.getElementById('job-time');
     const elBadge = document.getElementById('status-badge');
     const elProgressBar = document.getElementById('progress-bar');
     const elProgressLabel = document.getElementById('progress-label');
     const elStationList = document.getElementById('station-list');
-    const elScreenshotsSection = document.getElementById('screenshots-section');
-    const elScreenshotThumbs = document.getElementById('screenshot-thumbs');
+    const elCurrentStation = document.getElementById('current-station-label');
     const elDownloadWrap = document.getElementById('download-wrap');
     const elDownloadBtn = document.getElementById('download-btn');
     const elErrorCard = document.getElementById('error-card');
     const elErrorTitle = document.getElementById('error-title');
     const elErrorDetail = document.getElementById('error-detail');
     const elRetryBtn = document.getElementById('retry-btn');
+    const elScreenshotMain = document.getElementById('screenshot-main');
+    const elScreenshotPlaceholder = document.getElementById('screenshot-placeholder');
+    const elScreenshotThumbs = document.getElementById('screenshot-thumbs');
+    const elCotStream = document.getElementById('cot-stream');
+    const elCotPlaceholder = document.getElementById('cot-placeholder');
+    const elHeartbeat = document.getElementById('heartbeat');
+    const elReconnectBar = document.getElementById('reconnect-bar');
+    const elLightbox = document.getElementById('lightbox');
+    const elLightboxImg = document.getElementById('lightbox-img');
 
+    // --- Station list ---
     function renderStationList() {
       elStationList.innerHTML = '';
       STATIONS.forEach(s => {
@@ -457,23 +623,18 @@
         li.className = 'station-item';
 
         let iconChar, iconClass, nameClass, rightHtml;
+        const isCurrent = state.status === 'current';
 
         if (state.status === 'done') {
-          iconChar = '✓';
-          iconClass = 'done';
-          nameClass = 'done';
+          iconChar = '✓'; iconClass = 'done'; nameClass = 'done';
           rightHtml = state.issues > 0
             ? `<span class="station-right">${state.issues} 个问题</span>`
             : `<span class="station-right">—</span>`;
-        } else if (state.status === 'current') {
-          iconChar = '●';
-          iconClass = 'current';
-          nameClass = 'current';
+        } else if (isCurrent) {
+          iconChar = '●'; iconClass = 'current'; nameClass = 'current';
           rightHtml = `<span class="station-right current-label">进行中...</span>`;
         } else {
-          iconChar = '○';
-          iconClass = 'pending';
-          nameClass = 'pending';
+          iconChar = '○'; iconClass = 'pending'; nameClass = 'pending';
           rightHtml = '';
         }
 
@@ -482,203 +643,255 @@
           <span class="station-name ${nameClass}">${s.name}</span>
           ${rightHtml}
         `;
+        if (isCurrent) li.setAttribute('aria-current', 'step');
         elStationList.appendChild(li);
       });
     }
 
-    function updateProgressBar(completed, total, issues, etaMinutes) {
+    function updateProgressBar(completed, total, issues) {
       const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
       elProgressBar.style.width = `${pct}%`;
-
-      let label = `站点 ${completed}/${total}`;
-      if (etaMinutes != null && etaMinutes > 0) {
-        label += ` · 预计还需 ${etaMinutes} 分钟`;
-      }
-      label += ` · 已发现 ${issues} 个问题`;
-      elProgressLabel.textContent = label;
+      elProgressLabel.textContent = `站点 ${completed}/${total} · 已发现 ${issues} 个问题`;
     }
 
     function setStatusBadge(status) {
       elBadge.className = `status-badge ${status}`;
       const labels = {
-        planning: '待确认',
-        queued: '排队中',
-        running: '执行中',
-        done: '完成',
-        failed: '失败',
-        timeout: '超时',
-        partial: '部分完成'
+        planning: '待确认', queued: '排队中', running: '执行中',
+        done: '完成', failed: '失败', timeout: '超时', partial: '部分完成'
       };
       elBadge.textContent = labels[status] || status;
+      elBadge.setAttribute('aria-label', `状态: ${labels[status] || status}`);
     }
 
-    function showDownloadButton(reportUrl) {
-      elDownloadBtn.href = reportUrl || `/reports/${jobId}`;
-      elDownloadWrap.style.display = 'block';
-      setStatusBadge('done');
-      elProgressBar.style.width = '100%';
-    }
+    // --- Screenshots ---
+    function addScreenshot(url, filename) {
+      screenshots.push({ url, filename });
 
-    function showError(errorMsg, isTimeout) {
-      elErrorCard.style.display = 'block';
-      elErrorTitle.textContent = isTimeout ? '走查超时' : '走查失败';
-      elErrorDetail.textContent = errorMsg || '发生了未知错误，请重试。';
-      setStatusBadge(isTimeout ? 'timeout' : 'failed');
-    }
-
-    function addScreenshotThumb(payload) {
-      elScreenshotsSection.style.display = 'block';
+      // Add thumbnail
       const thumb = document.createElement('div');
       thumb.className = 'screenshot-thumb';
-
-      if (payload.imageUrl) {
-        thumb.innerHTML = `<img src="${payload.imageUrl}" alt="${payload.stationName || ''}">`;
-      } else {
-        thumb.innerHTML = `<span class="thumb-label">${payload.stationName || payload.stationId || '截图'}</span>`;
-      }
+      thumb.setAttribute('role', 'tab');
+      thumb.innerHTML = `<img src="${url}" alt="${filename}">`;
+      const idx = screenshots.length - 1;
+      thumb.addEventListener('click', () => setActiveScreenshot(idx));
       elScreenshotThumbs.appendChild(thumb);
+
+      // Auto-advance to latest
+      setActiveScreenshot(idx);
     }
 
-    function showPlanView(job) {
-      document.getElementById('plan-section').style.display = 'block';
-      document.getElementById('execution-section').style.display = 'none';
+    function setActiveScreenshot(idx) {
+      if (idx < 0 || idx >= screenshots.length) return;
+      activeScreenshot = idx;
 
-      const planList = document.getElementById('plan-station-list');
-      const stations = job.plan?.stations || STATIONS;
-      planList.innerHTML = '';
-      stations.forEach(s => {
-        const li = document.createElement('li');
-        li.className = 'plan-station-item';
-        li.innerHTML = `
-          <span class="plan-station-id">${s.id}</span>
-          <span class="plan-station-name">${s.name}</span>
-        `;
-        planList.appendChild(li);
-      });
-    }
-
-    function showExecutionView() {
-      document.getElementById('plan-section').style.display = 'none';
-      document.getElementById('execution-section').style.display = 'block';
-    }
-
-    function applyInitialState(job) {
-      jobData = job;
-      elSite.textContent = extractDomain(job.url) || '—';
-      elJobId.textContent = job.id || jobId;
-      elSubmitter.textContent = job.submitter || '—';
-      elTime.textContent = timeAgo(job.created_at);
-      setStatusBadge(job.status || 'planning');
-
-      if (job.status === 'planning') {
-        showPlanView(job);
-        return;
+      // Update main image
+      if (elScreenshotPlaceholder) elScreenshotPlaceholder.remove();
+      let mainImg = elScreenshotMain.querySelector('img');
+      if (!mainImg) {
+        mainImg = document.createElement('img');
+        elScreenshotMain.appendChild(mainImg);
       }
+      mainImg.src = screenshots[idx].url;
+      mainImg.alt = screenshots[idx].filename;
 
-      showExecutionView();
-      totalIssues = job.issue_count || 0;
-
-      renderStationList();
-      updateProgressBar(completedStations, STATIONS.length, totalIssues, null);
-
-      if (job.status === 'done') {
-        showDownloadButton(`/reports/${jobId}`);
-      } else if (job.status === 'failed') {
-        showError(job.error_msg, false);
-      } else if (job.status === 'timeout') {
-        showError(job.error_msg, true);
-      }
+      // Update thumb active state
+      const thumbs = elScreenshotThumbs.querySelectorAll('.screenshot-thumb');
+      thumbs.forEach((t, i) => t.classList.toggle('active', i === idx));
     }
 
-    async function connectRealtime() {
-      try {
-        const configRes = await fetch('/api/config');
-        const { supabaseUrl, supabaseAnonKey } = await configRes.json();
-        const sb = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-
-        sb.channel(`job-${jobId}`)
-          .on('postgres_changes', {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'jobs',
-            filter: `id=eq.${jobId}`,
-          }, (payload) => {
-            const job = payload.new;
-
-            // Update progress from the JSONB progress column
-            if (job.progress && job.progress.stations) {
-              const p = job.progress;
-              for (const [sid, info] of Object.entries(p.stations)) {
-                if (stationState[sid]) {
-                  stationState[sid].status = info.status;
-                  stationState[sid].issues = info.issues || 0;
-                }
-              }
-              completedStations = p.completed || 0;
-              totalIssues = job.issue_count || 0;
-              renderStationList();
-              updateProgressBar(p.completed || 0, p.total || STATIONS.length, totalIssues, null);
-            }
-
-            setStatusBadge(job.status);
-
-            // Handle planning → queued transition (e.g. confirmed from another tab)
-            if (job.status === 'queued' || job.status === 'running') {
-              showExecutionView();
-            }
-
-            if (job.status === 'done') {
-              showDownloadButton(job.report_url);
-            } else if (job.status === 'failed') {
-              showError(job.error_msg, false);
-            } else if (job.status === 'timeout') {
-              showError(job.error_msg, true);
-            } else if (job.status === 'partial') {
-              showDownloadButton(job.report_url);
-              showError('部分站点执行失败，已生成可用报告', false);
-            }
-          })
-          .subscribe();
-      } catch (err) {
-        console.error('Realtime connection failed:', err);
-      }
-    }
-
-    // Retry button
-    elRetryBtn.addEventListener('click', async () => {
-      if (!jobData) return;
-      elRetryBtn.disabled = true;
-      elRetryBtn.textContent = '提交中...';
-      try {
-        // Get auth session for retry
-        const configRes = await fetch('/api/config');
-        const { supabaseUrl, supabaseAnonKey } = await configRes.json();
-        const sb = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-        const { data: { session } } = await sb.auth.getSession();
-
-        const headers = { 'Content-Type': 'application/json' };
-        if (session) headers['Authorization'] = `Bearer ${session.access_token}`;
-
-        const res = await fetch('/jobs', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            url: jobData.url,
-            personas: jobData.personas,
-            rules: jobData.rules
-          })
-        });
-        if (!res.ok) throw new Error('提交失败');
-        const { jobId: newJobId } = await res.json();
-        window.location.href = `/jobs/${newJobId}`;
-      } catch (err) {
-        elRetryBtn.disabled = false;
-        elRetryBtn.textContent = '重新走查';
-        alert(err.message || '提交失败，请重试');
+    // Lightbox
+    elScreenshotMain.addEventListener('click', () => {
+      if (activeScreenshot < 0) return;
+      elLightboxImg.src = screenshots[activeScreenshot].url;
+      elLightbox.classList.add('open');
+    });
+    elLightbox.addEventListener('click', (e) => {
+      if (e.target !== elLightboxImg) elLightbox.classList.remove('open');
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && elLightbox.classList.contains('open')) {
+        elLightbox.classList.remove('open');
       }
     });
 
-    // Confirm plan button
+    // --- CoT stream ---
+    function clearCotPlaceholder() {
+      if (!cotPlaceholderCleared && elCotPlaceholder) {
+        elCotPlaceholder.remove();
+        cotPlaceholderCleared = true;
+      }
+    }
+
+    function appendCoT(delta) {
+      clearCotPlaceholder();
+      const span = document.createElement('span');
+      span.textContent = delta;
+      elCotStream.appendChild(span);
+      maybeAutoScroll();
+    }
+
+    function appendToolCall(toolName, args) {
+      clearCotPlaceholder();
+      const div = document.createElement('div');
+      const argsStr = typeof args === 'string' ? args :
+        (args?.url || args?.filename || args?.id || args?.selector || args?.text || JSON.stringify(args).slice(0, 80));
+      div.innerHTML = `<span class="cot-tool-pill"><span class="tool-name">▸ ${toolName}</span> → ${escHtml(String(argsStr))}</span>`;
+      elCotStream.appendChild(div);
+      maybeAutoScroll();
+    }
+
+    function addIssueCard(ev) {
+      clearCotPlaceholder();
+      const div = document.createElement('div');
+      const sevClass = (ev.severity || '').toLowerCase();
+      div.className = `cot-issue-card ${sevClass}`;
+      div.innerHTML = `
+        <div class="issue-title">${escHtml(ev.severity)} ${escHtml(ev.id)}: ${escHtml(ev.title || '')}</div>
+        <div class="issue-meta">${escHtml(ev.station || '')} · ${escHtml(ev.persona || '')}</div>
+      `;
+      elCotStream.appendChild(div);
+      totalIssues++;
+      updateProgressBar(completedStations, STATIONS.length, totalIssues);
+      maybeAutoScroll();
+    }
+
+    function onStationChange(ev) {
+      clearCotPlaceholder();
+
+      // Update left panel
+      for (const [sid, state] of Object.entries(stationState)) {
+        if (state.status === 'current') {
+          state.status = 'done';
+          completedStations++;
+        }
+      }
+      if (stationState[ev.stationId]) {
+        stationState[ev.stationId].status = 'current';
+      }
+      elCurrentStation.textContent = `当前: ${ev.stationId} ${ev.stationName}`;
+      renderStationList();
+      updateProgressBar(completedStations, STATIONS.length, totalIssues);
+      setStatusBadge('running');
+
+      // Add divider in CoT
+      const div = document.createElement('div');
+      div.className = 'cot-station-divider';
+      div.textContent = `── 站点 ${ev.stationId}: ${ev.stationName} ──`;
+      elCotStream.appendChild(div);
+      maybeAutoScroll();
+    }
+
+    function onTerminal(ev) {
+      if (ev.type === 'done') {
+        // Completion ceremony
+        const div = document.createElement('div');
+        div.className = 'cot-done-divider';
+        div.textContent = `走查完成 ✓ 共发现 ${totalIssues} 个问题`;
+        elCotStream.appendChild(div);
+
+        // Mark remaining current as done
+        for (const state of Object.values(stationState)) {
+          if (state.status === 'current') { state.status = 'done'; completedStations++; }
+        }
+
+        // Green flash
+        elProgressBar.style.width = '100%';
+        elProgressBar.classList.add('done-flash');
+        setTimeout(() => elProgressBar.classList.remove('done-flash'), 600);
+
+        setStatusBadge('done');
+        renderStationList();
+        updateProgressBar(completedStations, STATIONS.length, totalIssues);
+        elCurrentStation.textContent = '';
+
+        // Download button
+        elDownloadBtn.href = ev.reportUrl || `/reports/${jobId}`;
+        elDownloadWrap.style.display = 'block';
+        elDownloadBtn.classList.add('slide-up');
+      } else if (ev.type === 'failed') {
+        setStatusBadge('failed');
+        elErrorCard.style.display = 'block';
+        elErrorDetail.textContent = ev.error || '发生了未知错误';
+
+        // Show error in CoT
+        clearCotPlaceholder();
+        const div = document.createElement('div');
+        div.style.cssText = 'color: #ef4444; margin: 8px 0;';
+        div.textContent = `错误: ${ev.error || '未知错误'}`;
+        elCotStream.appendChild(div);
+      }
+
+      elHeartbeat.style.display = 'none';
+      elReconnectBar.classList.remove('show');
+    }
+
+    // Auto-scroll logic
+    elCotStream.addEventListener('scroll', () => {
+      const { scrollTop, scrollHeight, clientHeight } = elCotStream;
+      autoScroll = scrollTop + clientHeight >= scrollHeight - 20;
+    });
+
+    function maybeAutoScroll() {
+      if (autoScroll) {
+        elCotStream.scrollTop = elCotStream.scrollHeight;
+      }
+    }
+
+    function escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    // --- Heartbeat ---
+    setInterval(() => {
+      const gap = Date.now() - lastPingTime;
+      if (gap > 20000 && sse) {
+        elHeartbeat.classList.add('warning');
+      }
+    }, 5000);
+
+    // --- SSE ---
+    function connectSSE() {
+      sse = new EventSource(`/api/jobs/${jobId}/stream`);
+      elReconnectBar.classList.remove('show');
+      lastPingTime = Date.now();
+
+      sse.onmessage = (e) => {
+        const ev = JSON.parse(e.data);
+        lastPingTime = Date.now();
+        elHeartbeat.classList.remove('warning');
+
+        switch (ev.type) {
+          case 'cot':            appendCoT(ev.delta); break;
+          case 'screenshot':     addScreenshot(ev.url, ev.filename); break;
+          case 'tool-call':      appendToolCall(ev.toolName, ev.args); break;
+          case 'issue':          addIssueCard(ev); break;
+          case 'station-change': onStationChange(ev); break;
+          case 'done':
+          case 'failed':
+            sse.close();
+            sse = null;
+            onTerminal(ev);
+            break;
+          case 'ping':           break; // heartbeat handled by lastPingTime
+        }
+      };
+
+      sse.onerror = () => {
+        elReconnectBar.classList.add('show');
+        elHeartbeat.classList.add('warning');
+      };
+
+      sse.onopen = () => {
+        elReconnectBar.classList.remove('show');
+        elHeartbeat.classList.remove('warning');
+        lastPingTime = Date.now();
+      };
+    }
+
+    // --- Plan confirmation ---
     document.getElementById('confirm-btn').addEventListener('click', async () => {
       const btn = document.getElementById('confirm-btn');
       btn.disabled = true;
@@ -703,10 +916,13 @@
           throw new Error(err.error || '确认失败');
         }
 
-        showExecutionView();
+        // Switch to execution layout
+        document.getElementById('planning-layout').style.display = 'none';
+        document.getElementById('monitor-grid').style.display = 'grid';
         setStatusBadge('queued');
         renderStationList();
-        updateProgressBar(0, STATIONS.length, 0, null);
+        updateProgressBar(0, STATIONS.length, 0);
+        connectSSE();
         connectRealtime();
       } catch (err) {
         btn.disabled = false;
@@ -715,28 +931,154 @@
       }
     });
 
-    // Boot sequence
+    // --- Retry ---
+    elRetryBtn.addEventListener('click', async () => {
+      if (!jobData) return;
+      elRetryBtn.disabled = true;
+      elRetryBtn.textContent = '提交中...';
+      try {
+        const configRes = await fetch('/api/config');
+        const { supabaseUrl, supabaseAnonKey } = await configRes.json();
+        const sb = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+        const { data: { session } } = await sb.auth.getSession();
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (session) headers['Authorization'] = `Bearer ${session.access_token}`;
+
+        const res = await fetch('/jobs', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ url: jobData.url, personas: jobData.personas, rules: jobData.rules })
+        });
+        if (!res.ok) throw new Error('提交失败');
+        const { jobId: newJobId } = await res.json();
+        window.location.href = `/jobs/${newJobId}`;
+      } catch (err) {
+        elRetryBtn.disabled = false;
+        elRetryBtn.textContent = '重新走查';
+        alert(err.message || '提交失败，请重试');
+      }
+    });
+
+    // --- Supabase Realtime (fallback for progress) ---
+    async function connectRealtime() {
+      try {
+        const configRes = await fetch('/api/config');
+        const { supabaseUrl, supabaseAnonKey } = await configRes.json();
+        const sb = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+        sb.channel(`job-${jobId}`)
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'jobs',
+            filter: `id=eq.${jobId}`,
+          }, (payload) => {
+            const job = payload.new;
+
+            if (job.progress && job.progress.stations) {
+              const p = job.progress;
+              for (const [sid, info] of Object.entries(p.stations)) {
+                if (stationState[sid]) {
+                  stationState[sid].status = info.status;
+                  stationState[sid].issues = info.issues || 0;
+                }
+              }
+              completedStations = p.completed || 0;
+              totalIssues = job.issue_count || 0;
+              renderStationList();
+              updateProgressBar(p.completed || 0, p.total || STATIONS.length, totalIssues);
+            }
+
+            setStatusBadge(job.status);
+
+            if (job.status === 'queued' || job.status === 'running') {
+              document.getElementById('planning-layout').style.display = 'none';
+              document.getElementById('monitor-grid').style.display = 'grid';
+            }
+
+            if (job.status === 'done' && !sse) {
+              onTerminal({ type: 'done', reportUrl: job.report_url });
+            } else if (job.status === 'failed' && !sse) {
+              onTerminal({ type: 'failed', error: job.error_msg });
+            }
+          })
+          .subscribe();
+      } catch (err) {
+        console.error('Realtime connection failed:', err);
+      }
+    }
+
+    // --- Boot ---
     async function init() {
       if (!jobId) {
-        elSite.textContent = '无效的任务 ID';
+        document.getElementById('plan-job-site').textContent = '无效的任务 ID';
+        document.getElementById('planning-layout').style.display = 'block';
         return;
       }
-
-      // Render skeleton station list first
-      renderStationList();
 
       try {
         const res = await fetch(`/api/jobs/${jobId}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const job = await res.json();
-        applyInitialState(job);
+        jobData = job;
 
-        // Connect Realtime for active jobs (planning listens for confirm transition)
-        if (job.status === 'planning' || job.status === 'queued' || job.status === 'running') {
+        if (job.status === 'planning') {
+          // Show planning layout
+          document.getElementById('planning-layout').style.display = 'block';
+          document.getElementById('plan-job-site').textContent = extractDomain(job.url) || '—';
+          document.getElementById('plan-job-id').textContent = job.id;
+          document.getElementById('plan-job-time').textContent = timeAgo(job.created_at);
+
+          const planList = document.getElementById('plan-station-list');
+          const stations = job.plan?.stations || STATIONS;
+          planList.innerHTML = '';
+          stations.forEach(s => {
+            const li = document.createElement('li');
+            li.className = 'plan-station-item';
+            li.innerHTML = `<span class="plan-station-id">${s.id}</span><span class="plan-station-name">${s.name}</span>`;
+            planList.appendChild(li);
+          });
+
           connectRealtime();
+        } else {
+          // Show execution layout
+          document.getElementById('monitor-grid').style.display = 'grid';
+          elSite.textContent = extractDomain(job.url) || '—';
+          elJobId.textContent = job.id;
+          elTime.textContent = timeAgo(job.created_at);
+          setStatusBadge(job.status);
+          totalIssues = job.issue_count || 0;
+
+          // Populate station states from job progress
+          if (job.progress && job.progress.stations) {
+            for (const [sid, info] of Object.entries(job.progress.stations)) {
+              if (stationState[sid]) {
+                stationState[sid].status = info.status;
+                stationState[sid].issues = info.issues || 0;
+              }
+            }
+            completedStations = job.progress.completed || 0;
+          }
+
+          renderStationList();
+          updateProgressBar(completedStations, STATIONS.length, totalIssues);
+
+          if (job.status === 'done') {
+            onTerminal({ type: 'done', reportUrl: job.report_url || `/reports/${jobId}` });
+          } else if (job.status === 'failed') {
+            onTerminal({ type: 'failed', error: job.error_msg });
+          } else if (job.status === 'timeout') {
+            onTerminal({ type: 'failed', error: job.error_msg || '走查超时' });
+          } else {
+            // Running or queued — connect SSE + Realtime
+            connectSSE();
+            connectRealtime();
+          }
         }
       } catch (err) {
-        elProgressLabel.textContent = '加载失败，请刷新页面重试';
+        document.getElementById('planning-layout').style.display = 'block';
+        document.getElementById('plan-job-site').textContent = '加载失败，请刷新页面重试';
       }
     }
 
