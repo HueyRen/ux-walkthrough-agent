@@ -97,6 +97,7 @@ async function runPersonaStations({
           stopWhen: stepCountIs(50),
           maxTokens: 4096,
           abortSignal: signal,
+          experimental_allowSystemInMessages: true,
         });
 
         // Consume the stream and emit events
@@ -220,18 +221,35 @@ async function runJob(jobId, projectRoot, abortControllers) {
       .filter((r) => r.status === 'fulfilled')
       .map((r) => r.value);
 
+    // Log rejected personas for debugging
+    const rejected = results.filter((r) => r.status === 'rejected');
+    for (const r of rejected) {
+      console.error(`[${jobId}] Persona promise rejected:`, r.reason?.message || r.reason);
+    }
+
     const totalCompleted = allCheckers.reduce((sum, c) => sum + c.completed.size, 0);
     const totalStations = stations.length * personas.length;
+
+    // Check issue count from DB as fallback — even if checker shows 0,
+    // issues may have been recorded before the promise rejected
+    const latestJob = await getJob(jobId);
+    const dbIssueCount = latestJob?.issue_count || 0;
+
     let finalStatus;
-    if (totalCompleted === 0) finalStatus = 'failed';
-    else if (totalCompleted === totalStations) finalStatus = 'done';
-    else finalStatus = 'partial';
+    if (totalCompleted === totalStations) finalStatus = 'done';
+    else if (totalCompleted > 0 || dbIssueCount > 0) finalStatus = 'done';
+    else finalStatus = 'failed';
+
+    const errorSummary = rejected.length > 0
+      ? `${rejected.length} persona(s) had errors: ${rejected.map(r => r.reason?.message || 'unknown').join('; ')}`
+      : null;
 
     const reportUrl = `/reports/${jobId}`;
     await updateJob(jobId, {
       status: finalStatus,
       completed_at: new Date().toISOString(),
       report_url: reportUrl,
+      error_msg: errorSummary,
     });
 
     jobEmitter.emit(`job:${jobId}`, { type: 'done', status: finalStatus, reportUrl });

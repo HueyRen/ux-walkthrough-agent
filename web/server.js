@@ -267,9 +267,10 @@ async function main() {
   // Also buffer screenshots from the global emitter (for clients connecting later)
   // We need to capture screenshots even before any SSE client connects
   const globalBuffer = (jid, ev) => {
-    if (ev.type === 'screenshot') {
-      if (!screenshotBuffers.has(jid)) screenshotBuffers.set(jid, []);
-      screenshotBuffers.get(jid).push(ev);
+    if (!screenshotBuffers.has(jid)) screenshotBuffers.set(jid, []);
+    const buf = screenshotBuffers.get(jid);
+    if (ev.type === 'screenshot' || ev.type === 'station-change' || ev.type === 'issue') {
+      buf.push(ev);
     }
     if (ev.type === 'done' || ev.type === 'failed') {
       // Keep buffer for 30s after completion for late connectors, then clean
