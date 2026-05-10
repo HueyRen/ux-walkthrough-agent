@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UX 走查 Agent - 架构总览</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      line-height: 1.7;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    h1 span { color: #888; font-weight: 400; font-size: 16px; margin-left: 8px; }
+
+    .intro {
+      color: #666;
+      font-size: 15px;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 36px 0 16px;
+      color: #222;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h2 .num {
+      background: #1a73e8;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #555;
+      margin: 20px 0 8px;
+    }
+
+    p, li { font-size: 14px; color: #444; }
+    p { margin-bottom: 10px; }
+
+    ul { padding-left: 20px; margin-bottom: 14px; }
+    li { margin-bottom: 4px; }
+
+    /* Flow diagram */
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      margin: 20px 0 28px;
+      align-items: stretch;
+    }
+
+    .flow-step {
+      background: #fff;
+      border: 1px solid #d0d0d0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      flex: 1;
+      min-width: 150px;
+      position: relative;
+    }
+
+    .flow-step .step-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #1a73e8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .flow-step .step-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .flow-step .step-desc {
+      font-size: 12px;
+      color: #777;
+      line-height: 1.5;
+    }
+
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      padding: 0 6px;
+      color: #bbb;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* Cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+      margin: 16px 0 24px;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+
+    .card .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card .card-title code {
+      font-size: 11px;
+      background: #f0f0f0;
+      padding: 1px 6px;
+      border-radius: 3px;
+      color: #666;
+      font-weight: 400;
+    }
+
+    .card .card-desc {
+      font-size: 12px;
+      color: #777;
+      line-height: 1.5;
+    }
+
+    /* Code blocks */
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-size: 12px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      overflow-x: auto;
+      margin: 12px 0 20px;
+      line-height: 1.6;
+    }
+
+    pre .comment { color: #6a9955; }
+    pre .keyword { color: #569cd6; }
+    pre .string { color: #ce9178; }
+    pre .highlight { color: #dcdcaa; }
+    pre .type { color: #4ec9b0; }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 13px;
+    }
+
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      background: #f8f8f8;
+      border-bottom: 2px solid #ddd;
+      font-weight: 600;
+      color: #555;
+      font-size: 12px;
+    }
+
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      color: #444;
+    }
+
+    td code {
+      font-size: 11px;
+      background: #f0f0f0;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: #c7254e;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-blue { background: #e8f0fe; color: #1a73e8; }
+    .badge-green { background: #e6f4ea; color: #1e8e3e; }
+    .badge-orange { background: #fef3e0; color: #e37400; }
+    .badge-red { background: #fce8e6; color: #d93025; }
+    .badge-gray { background: #f0f0f0; color: #666; }
+
+    /* Diagram */
+    .diagram {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 24px;
+      margin: 16px 0 24px;
+      overflow-x: auto;
+    }
+
+    .diagram svg {
+      display: block;
+      margin: 0 auto;
+    }
+
+    .layer-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 8px 0;
+    }
+
+    .layer-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #999;
+      width: 80px;
+      text-align: right;
+      flex-shrink: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .layer-boxes {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+
+    .layer-box {
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+
+    .lb-blue { background: #e8f0fe; color: #1a73e8; border: 1px solid #c5d9f7; }
+    .lb-green { background: #e6f4ea; color: #1e8e3e; border: 1px solid #c0e0c8; }
+    .lb-orange { background: #fef3e0; color: #e37400; border: 1px solid #f5ddb0; }
+    .lb-purple { background: #f3e8fd; color: #7c3aed; border: 1px solid #dbc5f5; }
+    .lb-gray { background: #f5f5f5; color: #666; border: 1px solid #ddd; }
+
+    .layer-arrow {
+      text-align: center;
+      color: #ccc;
+      font-size: 14px;
+      margin: 2px 0;
+      padding-left: 92px;
+    }
+
+    .section-divider {
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 36px 0;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: #1a73e8;
+      text-decoration: none;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      .flow { flex-direction: column; }
+      .flow-arrow { transform: rotate(90deg); justify-content: center; padding: 4px 0; }
+      .layer-row { flex-direction: column; align-items: flex-start; }
+      .layer-label { text-align: left; width: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="back-link" href="/">&larr; 返回表单</a>
+    <h1>UX 走查 Agent <span>架构总览</span></h1>
+    <p class="intro">
+      自动化 UX 体验走查系统：设计师提交表单，Claude AI 驱动无头浏览器访问目标网站，
+      从多个用户画像视角逐站评估，最终输出结构化 HTML 走查报告。
+    </p>
+
+    <!-- ==================== 端到端流程 ==================== -->
+    <h2><span class="num">1</span> 端到端流程</h2>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="step-label">提交</div>
+        <div class="step-title">设计师填写表单</div>
+        <div class="step-desc">目标 URL、用户画像、研究目标、测试范围</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="step-label">认证</div>
+        <div class="step-title">Supabase 魔法链接</div>
+        <div class="step-desc">邮箱 OTP 登录，JWT 令牌附加到请求</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="step-label">排队</div>
+        <div class="step-title">任务入队</div>
+        <div class="step-desc">生成配置文件，写入数据库，p-queue（并发数: 1）</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="step-label">执行</div>
+        <div class="step-title">Claude + Playwright</div>
+        <div class="step-desc">9 个站点、多画像评估、截图、记录问题</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="step-label">报告</div>
+        <div class="step-title">HTML 输出</div>
+        <div class="step-desc">按站点分组的发现、严重度标签、截图</div>
+      </div>
+    </div>
+
+    <!-- ==================== 架构分层 ==================== -->
+    <h2><span class="num">2</span> 架构分层</h2>
+
+    <div class="diagram">
+      <div class="layer-row">
+        <div class="layer-label">前端</div>
+        <div class="layer-boxes">
+          <div class="layer-box lb-blue">index.html（表单 + 认证）</div>
+          <div class="layer-box lb-blue">status.html（实时进度）</div>
+          <div class="layer-box lb-blue">history.html（任务列表）</div>
+        </div>
+      </div>
+      <div class="layer-arrow">&darr; POST /jobs &nbsp;&nbsp;&nbsp; &darr; GET /api/jobs &nbsp;&nbsp;&nbsp; &uarr; Supabase Realtime</div>
+      <div class="layer-row">
+        <div class="layer-label">服务端</div>
+        <div class="layer-boxes">
+          <div class="layer-box lb-green">server.js（Express + 认证中间件）</div>
+          <div class="layer-box lb-green">config-writer.js（配置生成）</div>
+        </div>
+      </div>
+      <div class="layer-arrow">&darr; enqueue(jobId)</div>
+      <div class="layer-row">
+        <div class="layer-label">工作进程</div>
+        <div class="layer-boxes">
+          <div class="layer-box lb-orange">worker.js（p-queue，站点循环）</div>
+          <div class="layer-box lb-orange">checker.js（错误分类）</div>
+          <div class="layer-box lb-orange">tools.js（给 Claude 的 Playwright 工具）</div>
+        </div>
+      </div>
+      <div class="layer-arrow">&darr; generateText() &nbsp;&nbsp;&nbsp; &darr; Playwright CDP</div>
+      <div class="layer-row">
+        <div class="layer-label">AI + 浏览器</div>
+        <div class="layer-boxes">
+          <div class="layer-box lb-purple">Claude API（Sonnet/Opus）</div>
+          <div class="layer-box lb-purple">无头 Chromium</div>
+        </div>
+      </div>
+      <div class="layer-arrow">&darr; INSERT findings &nbsp;&nbsp;&nbsp; &darr; UPDATE jobs.progress</div>
+      <div class="layer-row">
+        <div class="layer-label">数据库</div>
+        <div class="layer-boxes">
+          <div class="layer-box lb-gray">Supabase Postgres（jobs, findings）</div>
+          <div class="layer-box lb-gray">Supabase Storage（截图）</div>
+          <div class="layer-box lb-gray">Supabase Auth（用户）</div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- ==================== 文件地图 ==================== -->
+    <h2><span class="num">3</span> 文件地图</h2>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">server.js <code>web/</code></div>
+        <div class="card-desc">Express HTTP 服务器。路由：POST /jobs、GET /api/jobs、GET /reports/:id。认证中间件验证 Supabase JWT。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">worker.js <code>web/</code></div>
+        <div class="card-desc">任务执行引擎。读取配置、启动 Playwright、遍历站点、调用 Claude generateText() 配合浏览器工具。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">tools.js <code>web/</code></div>
+        <div class="card-desc">定义 7 个 Playwright 工具供 Claude 使用：navigate、click、type、screenshot、evaluate、recordIssue、scroll。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">checker.js <code>web/</code></div>
+        <div class="card-desc">WalkthroughChecker 类。跟踪站点进度，分类错误（可重试/致命/轻微），决定是否中断走查。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">db.js <code>web/</code></div>
+        <div class="card-desc">Supabase CRUD 封装：createJob、getJob、updateJob、listJobs、incrementIssueCount。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">config-writer.js <code>web/</code></div>
+        <div class="card-desc">从 instances/alibaba-b2b/ 模板复制文件到 instances/{jobId}/，按选择筛选画像，生成 config.md。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">models.js <code>web/</code></div>
+        <div class="card-desc">Claude 模型注册表。将友好名称（claude-sonnet、claude-opus）映射到模型 ID。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">supabase.js <code>web/</code></div>
+        <div class="card-desc">初始化 Supabase 管理客户端（service role）和匿名客户端，读取环境变量。</div>
+      </div>
+    </div>
+
+    <h3>实例模板</h3>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">system_instructions.md</div>
+        <div class="card-desc">Agent 角色定义、评估规则、截图规范、严重度等级、输出格式。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">personas.md</div>
+        <div class="card-desc">3 个默认画像：Lisa（新买家）、Carlos（经验买家）、Marcus（B2B 采购经理）。按任务筛选。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">task_card_01_core.md</div>
+        <div class="card-desc">9 站点路线图。每站包含：目标页面、操作步骤、多画像评估维度、截图要求。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">issue_schema.md</div>
+        <div class="card-desc">结构化问题格式：id、严重度（P0-P3）、分类（Quick Win / 结构性 / 战略性）、影响、建议。</div>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- ==================== 执行循环 ==================== -->
+    <h2><span class="num">4</span> Worker 执行循环</h2>
+
+    <p>每个任务在 <code>worker.js</code> 中按以下流程执行：</p>
+
+    <pre><span class="comment">// 简化的执行流程</span>
+
+<span class="keyword">for</span> (<span class="keyword">const</span> station <span class="keyword">of</span> stations) {
+  <span class="comment">// 1. 创建新的浏览器上下文（1440x900 视口）</span>
+  <span class="keyword">const</span> context = <span class="keyword">await</span> browser.<span class="highlight">newContext</span>({ viewport: { width: 1440, height: 900 } });
+
+  <span class="comment">// 2. 构建站点专属 Prompt</span>
+  <span class="keyword">const</span> prompt = <span class="string">`执行站点 ${station.id}: ${station.name}\n${station.content}`</span>;
+
+  <span class="comment">// 3. 调用 Claude，附带 Playwright 工具</span>
+  <span class="keyword">await</span> <span class="highlight">generateText</span>({
+    model: <span class="string">'claude-sonnet-4-20250514'</span>,
+    system: [systemInstructions, issueSchema],
+    prompt: prompt,
+    tools: [navigate, click, type, screenshot, evaluate, recordIssue, scroll],
+    maxSteps: <span class="type">50</span>,
+    maxTokens: <span class="type">4096</span>,
+  });
+
+  <span class="comment">// 4. 可重试错误最多重试 3 次（超时、限流）</span>
+  <span class="comment">// 5. 轻微错误跳过当前站（元素未找到）</span>
+  <span class="comment">// 6. 累计 5+ 致命错误则终止整个走查</span>
+
+  <span class="comment">// 7. 更新数据库进度（触发 Realtime 推送到前端）</span>
+  <span class="keyword">await</span> <span class="highlight">updateJob</span>(jobId, { progress: checker.getProgress() });
+}</pre>
+
+    <!-- ==================== 工具表 ==================== -->
+    <h2><span class="num">5</span> Claude 的浏览器工具</h2>
+
+    <table>
+      <thead>
+        <tr><th>工具</th><th>用途</th><th>关键参数</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>navigate</code></td>
+          <td>跳转到 URL</td>
+          <td>url, waitUntil (load/domcontentloaded/networkidle)</td>
+        </tr>
+        <tr>
+          <td><code>click</code></td>
+          <td>点击元素</td>
+          <td>selector（CSS 选择器）或 text（可见文本匹配）</td>
+        </tr>
+        <tr>
+          <td><code>type</code></td>
+          <td>在输入框中输入</td>
+          <td>selector, text, pressEnter</td>
+        </tr>
+        <tr>
+          <td><code>screenshot</code></td>
+          <td>截取页面/元素</td>
+          <td>filename, selector（可选）, fullPage</td>
+        </tr>
+        <tr>
+          <td><code>evaluate</code></td>
+          <td>在页面中执行 JS</td>
+          <td>script（任意 JavaScript）</td>
+        </tr>
+        <tr>
+          <td><code>recordIssue</code></td>
+          <td>保存结构化问题</td>
+          <td>id, severity, title, description, personas, screenshot</td>
+        </tr>
+        <tr>
+          <td><code>scroll</code></td>
+          <td>滚动视口</td>
+          <td>direction (up/down), pixels</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <hr class="section-divider">
+
+    <!-- ==================== 数据库结构 ==================== -->
+    <h2><span class="num">6</span> 数据库结构</h2>
+
+    <h3>jobs 表</h3>
+    <table>
+      <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>TEXT PK</td><td>6 位十六进制（如 "a3f1c0"）</td></tr>
+        <tr><td><code>user_id</code></td><td>UUID</td><td>外键关联 auth.users</td></tr>
+        <tr><td><code>url</code></td><td>TEXT</td><td>目标网站</td></tr>
+        <tr><td><code>personas</code></td><td>JSONB</td><td>["Lisa", "Carlos"]</td></tr>
+        <tr><td><code>status</code></td><td>TEXT</td><td>
+          <span class="badge badge-gray">queued</span>
+          <span class="badge badge-blue">running</span>
+          <span class="badge badge-green">done</span>
+          <span class="badge badge-orange">partial</span>
+          <span class="badge badge-red">failed</span>
+        </td></tr>
+        <tr><td><code>progress</code></td><td>JSONB</td><td>逐站状态，触发 Realtime 推送</td></tr>
+        <tr><td><code>issue_count</code></td><td>INT</td><td>通过 RPC 函数递增</td></tr>
+        <tr><td><code>report_url</code></td><td>TEXT</td><td>/reports/{jobId}</td></tr>
+      </tbody>
+    </table>
+
+    <h3>findings 表</h3>
+    <table>
+      <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>TEXT PK</td><td>P-S1-01 格式</td></tr>
+        <tr><td><code>job_id</code></td><td>TEXT FK</td><td>关联 jobs.id</td></tr>
+        <tr><td><code>station</code></td><td>TEXT</td><td>S1, S2, ... S9</td></tr>
+        <tr><td><code>severity</code></td><td>TEXT</td><td>P0（阻断）~ P3（轻微）</td></tr>
+        <tr><td><code>classification</code></td><td>TEXT</td><td>Quick Win / 结构性 / 战略性</td></tr>
+        <tr><td><code>screenshot_url</code></td><td>TEXT</td><td>Supabase Storage 公开 URL</td></tr>
+        <tr><td><code>raw_data</code></td><td>JSONB</td><td>完整的结构化问题对象</td></tr>
+      </tbody>
+    </table>
+
+    <hr class="section-divider">
+
+    <!-- ==================== 认证流程 ==================== -->
+    <h2><span class="num">7</span> 认证流程</h2>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="step-label">1</div>
+        <div class="step-title">输入邮箱</div>
+        <div class="step-desc">index.html 登录表单</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="step-label">2</div>
+        <div class="step-title">发送魔法链接</div>
+        <div class="step-desc">supabase.auth.signInWithOtp()</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="step-label">3</div>
+        <div class="step-title">点击邮件链接</div>
+        <div class="step-desc">重定向回应用，建立会话</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="step-label">4</div>
+        <div class="step-title">JWT 附加到请求头</div>
+        <div class="step-desc">Authorization: Bearer {token}</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="step-label">5</div>
+        <div class="step-title">服务端验证</div>
+        <div class="step-desc">supabaseAdmin.auth.getUser(token)</div>
+      </div>
+    </div>
+
+    <p>RLS 策略确保用户只能读取自己的任务和发现。Worker 使用 <strong>service role</strong> 密钥绕过 RLS 进行写入。</p>
+
+    <hr class="section-divider">
+
+    <!-- ==================== 错误处理 ==================== -->
+    <h2><span class="num">8</span> 错误分类</h2>
+
+    <table>
+      <thead><tr><th>错误类型</th><th>示例</th><th>处理方式</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-orange">可重试</span></td>
+          <td>超时、限流、网络错误</td>
+          <td>最多重试 3 次，递增退避</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-red">致命</span></td>
+          <td>认证失败、浏览器崩溃、目标关闭</td>
+          <td>跳过当前站，累计致命计数器。达到 5 次则终止走查。</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-gray">轻微</span></td>
+          <td>元素未找到、Cookie 弹窗</td>
+          <td>跳过当前站，继续走查</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>最终状态判定</h3>
+    <ul>
+      <li><span class="badge badge-green">done</span> 所有站点均已完成</li>
+      <li><span class="badge badge-orange">partial</span> 部分站点完成，部分有致命错误</li>
+      <li><span class="badge badge-red">failed</span> 无站点完成，或被致命错误阈值中断</li>
+    </ul>
+
+    <hr class="section-divider">
+
+    <p style="color:#999; font-size:12px; text-align:center; margin-top:20px;">
+      内部参考文档 &middot; /web/public/study.html
+    </p>
+  </div>
+</body>
+</html>

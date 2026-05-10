@@ -7,7 +7,7 @@ const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
 
-const { initDb, createJob, getJob, listJobs } = require('./db');
+const { initDb, createJob, getJob, updateJob, listJobs } = require('./db');
 const { writeConfigs } = require('./config-writer');
 const { supabaseAdmin, supabaseUrl, supabaseAnonKey } = require('./supabase');
 
@@ -63,7 +63,7 @@ async function main() {
 
       const jobId = crypto.randomBytes(3).toString('hex');
 
-      await writeConfigs(projectRoot, jobId, {
+      const { stations } = await writeConfigs(projectRoot, jobId, {
         ...req.body,
         submitter: req.userEmail,
       });
@@ -74,12 +74,42 @@ async function main() {
         personas,
         rules,
         model,
+        plan: { stations, user_prompt: '' },
       });
-      worker.enqueue(jobId);
 
       res.json({ jobId, statusUrl: `/jobs/${jobId}` });
     } catch (err) {
       console.error('POST /jobs error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /jobs/:id/confirm — confirm plan and start execution
+  app.post('/jobs/:id/confirm', authMiddleware, async (req, res) => {
+    try {
+      const job = await getJob(req.params.id);
+      if (!job) return res.status(404).json({ error: '任务不存在' });
+      if (job.status !== 'planning') {
+        return res.status(400).json({ error: '任务不在计划确认阶段' });
+      }
+
+      const userPrompt = (req.body.user_prompt || '').trim();
+
+      // Update plan with user prompt
+      const updatedPlan = { ...job.plan, user_prompt: userPrompt };
+      await updateJob(req.params.id, { status: 'queued', plan: updatedPlan });
+
+      // Append user prompt to config.md if provided
+      if (userPrompt) {
+        const configPath = path.join(projectRoot, 'instances', req.params.id, 'config.md');
+        const fs = require('fs');
+        fs.appendFileSync(configPath, `\n\n## 用户补充指令\n${userPrompt}\n`, 'utf8');
+      }
+
+      worker.enqueue(req.params.id);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('POST /jobs/:id/confirm error:', err);
       res.status(500).json({ error: err.message });
     }
   });

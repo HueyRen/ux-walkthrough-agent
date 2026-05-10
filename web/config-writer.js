@@ -23,10 +23,11 @@ function writeConfigs(projectRoot, jobId, {
   fs.writeFileSync(path.join(dest, 'personas.md'), filteredPersonas, 'utf8');
 
   // 3. task_card_01_core.md → task_card.md
-  fs.copyFileSync(
-    path.join(src, 'task_card_01_core.md'),
-    path.join(dest, 'task_card.md')
-  );
+  const taskCardContent = fs.readFileSync(path.join(src, 'task_card_01_core.md'), 'utf8');
+  fs.writeFileSync(path.join(dest, 'task_card.md'), taskCardContent, 'utf8');
+
+  // Parse stations for plan display
+  const stations = parseStations(taskCardContent);
 
   // 4. config.md
   const configLines = [
@@ -58,6 +59,8 @@ function writeConfigs(projectRoot, jobId, {
   const config = configLines.join('\n') + '\n';
 
   fs.writeFileSync(path.join(dest, 'config.md'), config, 'utf8');
+
+  return { stations };
 }
 
 function filterPersonas(raw, selectedFirstNames) {
@@ -102,4 +105,14 @@ function filterPersonas(raw, selectedFirstNames) {
   return parts.join('\n') + '\n';
 }
 
-module.exports = { writeConfigs };
+function parseStations(taskCardContent) {
+  const stations = [];
+  const regex = /^## 站点\s*(\d+):\s*(.+?)(?:\s*\(.*?\))?\s*$/gm;
+  let match;
+  while ((match = regex.exec(taskCardContent)) !== null) {
+    stations.push({ id: `S${parseInt(match[1], 10)}`, name: match[2].trim() });
+  }
+  return stations;
+}
+
+module.exports = { writeConfigs, parseStations };

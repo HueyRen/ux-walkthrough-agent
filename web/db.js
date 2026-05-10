@@ -10,7 +10,7 @@ async function initDb() {
     .eq('status', 'running');
 }
 
-async function createJob({ id, user_id, url, personas, rules, model }) {
+async function createJob({ id, user_id, url, personas, rules, model, plan }) {
   const { error } = await supabaseAdmin.from('jobs').insert({
     id,
     user_id,
@@ -18,7 +18,8 @@ async function createJob({ id, user_id, url, personas, rules, model }) {
     personas: Array.isArray(personas) ? personas : JSON.parse(personas),
     rules: rules || 'b2b_ecommerce',
     model: model || 'claude-sonnet',
-    status: 'queued',
+    status: 'planning',
+    plan: plan || {},
     created_at: new Date().toISOString(),
   });
   if (error) throw new Error(`createJob failed: ${error.message}`);

@@ -51,6 +51,12 @@ async function runJob(jobId, projectRoot) {
     const job = await getJob(jobId);
     const model = getModel(job.model || 'claude-sonnet');
 
+    // Inject user supplemental prompt if provided
+    let fullSystemPrompt = systemPrompt + '\n\n' + issueSchema;
+    if (job.plan?.user_prompt) {
+      fullSystemPrompt += `\n\n## 用户补充指令\n${job.plan.user_prompt}`;
+    }
+
     // Launch browser
     const browser = await chromium.launch({
       headless: true,
@@ -83,7 +89,7 @@ async function runJob(jobId, projectRoot) {
 
           await generateText({
             model,
-            system: [systemPrompt, issueSchema].join('\n\n---\n\n'),
+            system: fullSystemPrompt,
             prompt: stationPrompt,
             tools,
             maxSteps: 50,

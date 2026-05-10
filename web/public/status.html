@@ -75,6 +75,7 @@
       border-radius: 12px;
       white-space: nowrap;
     }
+    .status-badge.planning { background: #e8f0fe; color: #1a73e8; }
     .status-badge.queued  { background: #e2e3e5; color: #383d41; }
     .status-badge.running { background: #fff3cd; color: #856404; }
     .status-badge.done    { background: #d4edda; color: #155724; }
@@ -252,6 +253,85 @@
     .retry-btn:hover { background: #b02a37; }
     .retry-btn:disabled { background: #ccc; cursor: not-allowed; }
 
+    /* Plan confirmation UI */
+    .plan-section {
+      margin-top: 16px;
+    }
+
+    .plan-station-list {
+      list-style: none;
+      margin: 0 0 20px;
+    }
+
+    .plan-station-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+
+    .plan-station-item:last-child { border-bottom: none; }
+
+    .plan-station-id {
+      width: 32px;
+      font-size: 12px;
+      color: #999;
+      font-family: monospace;
+      flex-shrink: 0;
+    }
+
+    .plan-station-name {
+      color: #333;
+    }
+
+    .plan-prompt-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    .plan-prompt-textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #d0d0d0;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      color: #333;
+      resize: vertical;
+      min-height: 72px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .plan-prompt-textarea:focus {
+      border-color: #4a90d9;
+    }
+
+    .plan-prompt-textarea::placeholder {
+      color: #aaa;
+    }
+
+    .confirm-btn {
+      width: 100%;
+      padding: 11px;
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 16px;
+    }
+
+    .confirm-btn:hover { background: #1558c0; }
+    .confirm-btn:disabled { background: #a0c0f0; cursor: not-allowed; }
+
     @media (max-width: 600px) {
       .card { padding: 20px 16px; }
       .job-header { flex-direction: column; }
@@ -279,22 +359,38 @@
         <span class="status-badge queued" id="status-badge">排队中</span>
       </div>
 
-      <div class="progress-wrap">
-        <div class="progress-bar-track">
-          <div class="progress-bar-fill" id="progress-bar"></div>
+      <!-- Plan confirmation view (shown when status=planning) -->
+      <div class="plan-section" id="plan-section" style="display:none">
+        <ul class="plan-station-list" id="plan-station-list"></ul>
+        <div class="plan-prompt-label">还有什么想补充的？</div>
+        <textarea
+          class="plan-prompt-textarea"
+          id="plan-prompt"
+          placeholder="如：重点关注搜索体验和筛选器、以移动端视角评估…"
+          rows="3"
+        ></textarea>
+        <button class="confirm-btn" id="confirm-btn">确认并开始走查 →</button>
+      </div>
+
+      <!-- Execution progress view (shown when status != planning) -->
+      <div id="execution-section">
+        <div class="progress-wrap">
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progress-bar"></div>
+          </div>
+          <div class="progress-label" id="progress-label">等待开始...</div>
         </div>
-        <div class="progress-label" id="progress-label">等待开始...</div>
-      </div>
 
-      <ul class="station-list" id="station-list"></ul>
+        <ul class="station-list" id="station-list"></ul>
 
-      <div class="screenshots-section" id="screenshots-section" style="display:none">
-        <div class="screenshots-label">截图预览</div>
-        <div class="screenshot-thumbs" id="screenshot-thumbs"></div>
-      </div>
+        <div class="screenshots-section" id="screenshots-section" style="display:none">
+          <div class="screenshots-label">截图预览</div>
+          <div class="screenshot-thumbs" id="screenshot-thumbs"></div>
+        </div>
 
-      <div id="download-wrap" style="display:none">
-        <a id="download-btn" class="download-btn" href="#">下载 HTML 报告</a>
+        <div id="download-wrap" style="display:none">
+          <a id="download-btn" class="download-btn" href="#">下载 HTML 报告</a>
+        </div>
       </div>
     </div>
 
@@ -405,6 +501,7 @@
     function setStatusBadge(status) {
       elBadge.className = `status-badge ${status}`;
       const labels = {
+        planning: '待确认',
         queued: '排队中',
         running: '执行中',
         done: '完成',
@@ -442,14 +539,43 @@
       elScreenshotThumbs.appendChild(thumb);
     }
 
+    function showPlanView(job) {
+      document.getElementById('plan-section').style.display = 'block';
+      document.getElementById('execution-section').style.display = 'none';
+
+      const planList = document.getElementById('plan-station-list');
+      const stations = job.plan?.stations || STATIONS;
+      planList.innerHTML = '';
+      stations.forEach(s => {
+        const li = document.createElement('li');
+        li.className = 'plan-station-item';
+        li.innerHTML = `
+          <span class="plan-station-id">${s.id}</span>
+          <span class="plan-station-name">${s.name}</span>
+        `;
+        planList.appendChild(li);
+      });
+    }
+
+    function showExecutionView() {
+      document.getElementById('plan-section').style.display = 'none';
+      document.getElementById('execution-section').style.display = 'block';
+    }
+
     function applyInitialState(job) {
       jobData = job;
       elSite.textContent = extractDomain(job.url) || '—';
       elJobId.textContent = job.id || jobId;
       elSubmitter.textContent = job.submitter || '—';
       elTime.textContent = timeAgo(job.created_at);
-      setStatusBadge(job.status || 'queued');
+      setStatusBadge(job.status || 'planning');
 
+      if (job.status === 'planning') {
+        showPlanView(job);
+        return;
+      }
+
+      showExecutionView();
       totalIssues = job.issue_count || 0;
 
       renderStationList();
@@ -495,6 +621,11 @@
             }
 
             setStatusBadge(job.status);
+
+            // Handle planning → queued transition (e.g. confirmed from another tab)
+            if (job.status === 'queued' || job.status === 'running') {
+              showExecutionView();
+            }
 
             if (job.status === 'done') {
               showDownloadButton(job.report_url);
@@ -547,6 +678,43 @@
       }
     });
 
+    // Confirm plan button
+    document.getElementById('confirm-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('confirm-btn');
+      btn.disabled = true;
+      btn.textContent = '提交中...';
+      try {
+        const configRes = await fetch('/api/config');
+        const { supabaseUrl, supabaseAnonKey } = await configRes.json();
+        const sb = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+        const { data: { session } } = await sb.auth.getSession();
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (session) headers['Authorization'] = `Bearer ${session.access_token}`;
+
+        const userPrompt = document.getElementById('plan-prompt').value.trim();
+        const res = await fetch(`/jobs/${jobId}/confirm`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ user_prompt: userPrompt }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || '确认失败');
+        }
+
+        showExecutionView();
+        setStatusBadge('queued');
+        renderStationList();
+        updateProgressBar(0, STATIONS.length, 0, null);
+        connectRealtime();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = '确认并开始走查 →';
+        alert(err.message || '确认失败，请重试');
+      }
+    });
+
     // Boot sequence
     async function init() {
       if (!jobId) {
@@ -563,8 +731,8 @@
         const job = await res.json();
         applyInitialState(job);
 
-        // Connect Realtime only if job is still active
-        if (job.status === 'queued' || job.status === 'running') {
+        // Connect Realtime for active jobs (planning listens for confirm transition)
+        if (job.status === 'planning' || job.status === 'queued' || job.status === 'running') {
           connectRealtime();
         }
       } catch (err) {
