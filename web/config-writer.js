@@ -4,7 +4,7 @@ const path = require('path');
 function writeConfigs(projectRoot, jobId, {
   url, submitter, personas, rules,
   business_question, research_question, success_metrics,
-  in_scope, custom_persona,
+  user_goal, in_scope, custom_persona,
 }) {
   const src = path.join(projectRoot, 'instances', 'alibaba-b2b');
   const dest = path.join(projectRoot, 'instances', jobId);
@@ -39,15 +39,15 @@ function writeConfigs(projectRoot, jobId, {
     `- Rules: ${rules}`,
     `- Date: ${new Date().toISOString()}`,
     '',
+    '## 用户任务目标（最高优先级）',
+    user_goal || '(未填写)',
+    '',
     '## Research Objectives',
     `### Business Question`,
     business_question || '(未填写)',
     '',
     `### Research Question`,
     research_question || '(未填写)',
-    '',
-    `### Success Metrics`,
-    success_metrics || '(未填写)',
     '',
     '## Scope',
     `### In Scope`,

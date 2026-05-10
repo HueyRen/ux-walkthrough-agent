@@ -247,6 +247,16 @@
       <p class="section-label">测试范围</p>
 
       <div class="form-group">
+        <label for="user_goal">用户目标</label>
+        <textarea
+          id="user_goal"
+          name="user_goal"
+          placeholder="用户要完成什么任务？例如：找到一款符合预算的蓝牙耳机并发起询盘"
+          rows="2"
+        ></textarea>
+      </div>
+
+      <div class="form-group">
         <label for="in_scope">In Scope</label>
         <textarea
           id="in_scope"
@@ -404,6 +414,7 @@
       const business_question = document.getElementById('business_question').value.trim();
       const research_question = document.getElementById('research_question').value.trim();
       const success_metrics = '';
+      const user_goal = document.getElementById('user_goal').value.trim();
       const in_scope = document.getElementById('in_scope').value.trim();
       const custom_persona = document.getElementById('custom_persona').value.trim();
 
@@ -426,7 +437,7 @@
           body: JSON.stringify({
             url, personas, rules,
             business_question, research_question, success_metrics,
-            in_scope, custom_persona,
+            user_goal, in_scope, custom_persona,
           })
         });
 

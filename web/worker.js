@@ -43,6 +43,7 @@ async function runJob(jobId, projectRoot) {
     );
     const personasDoc = fs.readFileSync(path.join(instanceDir, 'personas.md'), 'utf8');
     const taskCardDoc = fs.readFileSync(path.join(instanceDir, 'task_card.md'), 'utf8');
+    const configDoc = fs.readFileSync(path.join(instanceDir, 'config.md'), 'utf8');
     const issueSchema = fs.readFileSync(
       path.join(projectRoot, 'schema', 'issue_schema.md'),
       'utf8'
@@ -51,6 +52,10 @@ async function runJob(jobId, projectRoot) {
     const stations = parseTaskCard(taskCardDoc);
     const job = await getJob(jobId);
     const model = getModel(job.model || 'claude-sonnet');
+
+    // Extract user goal from config
+    const userGoalMatch = configDoc.match(/## 用户任务目标（最高优先级）\n(.+)/);
+    const userGoal = userGoalMatch ? userGoalMatch[1].trim() : '';
 
     // Inject user supplemental prompt if provided
     let fullSystemPrompt = systemPrompt + '\n\n' + issueSchema;
@@ -93,7 +98,7 @@ async function runJob(jobId, projectRoot) {
 
       while (retryCount <= 2 && !stationDone) {
         try {
-          const stationPrompt = buildStationPrompt(station, personasDoc, job);
+          const stationPrompt = buildStationPrompt(station, personasDoc, job, userGoal);
 
           const result = streamText({
             model,
@@ -194,9 +199,13 @@ function parseTaskCard(markdown) {
 }
 
 // Build per-station prompt
-function buildStationPrompt(station, personasDoc, job) {
-  return `You are now executing Station ${station.id}: ${station.name}
+function buildStationPrompt(station, personasDoc, job, userGoal) {
+  const goalSection = userGoal && userGoal !== '(未填写)'
+    ? `\n## 用户任务目标（最高优先级）\n${userGoal}\n\n所有站点的操作和评估都应围绕此目标展开。评估每个界面是否帮助用户高效达成此目标。\n`
+    : '';
 
+  return `You are now executing Station ${station.id}: ${station.name}
+${goalSection}
 ## Target URL
 ${job.url}
 
