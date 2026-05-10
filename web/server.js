@@ -18,13 +18,16 @@ const projectRoot = path.resolve(__dirname, '..');
 // Auth middleware — verifies Supabase JWT
 async function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: '未提供认证令牌' });
-
-  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !user) return res.status(401).json({ error: '认证无效' });
-
-  req.userId = user.id;
-  req.userEmail = user.email;
+  if (token) {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (!error && user) {
+      req.userId = user.id;
+      req.userEmail = user.email;
+    }
+  }
+  // Allow unauthenticated access — auth verification disabled for now
+  req.userId = req.userId || 'anonymous';
+  req.userEmail = req.userEmail || 'anonymous@local';
   next();
 }
 

@@ -328,30 +328,9 @@
     `;
 
     async function initAuth() {
-      try {
-        const configRes = await fetch('/api/config');
-        const { supabaseUrl, supabaseAnonKey } = await configRes.json();
-        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-
-        const { data: { session: existingSession } } = await supabaseClient.auth.getSession();
-        if (existingSession) {
-          session = existingSession;
-          showForm();
-        } else {
-          showAuth();
-        }
-
-        // Listen for auth state changes (magic link callback)
-        supabaseClient.auth.onAuthStateChange((event, newSession) => {
-          if (event === 'SIGNED_IN' && newSession) {
-            session = newSession;
-            showForm();
-          }
-        });
-      } catch (err) {
-        console.error('Auth init failed:', err);
-        showAuth();
-      }
+      // Auth verification disabled — show form directly
+      session = { skip: true };
+      showForm();
     }
 
     function showAuth() {
