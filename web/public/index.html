@@ -216,10 +216,10 @@
           type="url"
           id="url"
           name="url"
-          value="https://www.alibaba.com"
+          placeholder="https://example.com"
           required
         >
-        <small>v1 仅支持 alibaba.com 域名</small>
+        <small>输入任何公开网站的 URL</small>
       </div>
 
       <p class="section-label">研究目标</p>
@@ -269,9 +269,10 @@
       <div class="form-group">
         <label>选择用户画像 <span style="font-weight:400;color:#999">（可多选）</span></label>
         <div class="persona-chips">
-          <button type="button" class="chip selected" data-persona="Lisa">Lisa（新买家）</button>
-          <button type="button" class="chip selected" data-persona="Carlos">Carlos（经验买家）</button>
-          <button type="button" class="chip" data-persona="Marcus">Marcus（B2B 采购经理）</button>
+          <button type="button" class="chip selected" data-persona="new_user">New User（新用户）</button>
+          <button type="button" class="chip selected" data-persona="experienced_user">Experienced（资深用户）</button>
+          <button type="button" class="chip" data-persona="mobile_user">Mobile（移动端）</button>
+          <button type="button" class="chip" data-persona="accessibility_user">Accessibility（无障碍）</button>
           <button type="button" class="chip" data-persona="custom" id="custom-chip">+ 自定义</button>
         </div>
         <p class="chip-hint">至少选择一个用户画像</p>
@@ -287,7 +288,10 @@
       <div class="form-group">
         <label for="rules">评估规则集</label>
         <select id="rules" name="rules">
-          <option value="b2b_ecommerce">B2B 电商通用规则</option>
+          <option value="general">通用 UX 规则</option>
+          <option value="ecommerce">电商规则</option>
+          <option value="saas">SaaS / Web App 规则</option>
+          <option value="content">内容型网站规则</option>
         </select>
       </div>
 
@@ -428,12 +432,13 @@
       submitBtn.textContent = '提交中...';
 
       try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (session && session.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
         const res = await fetch('/jobs', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
+          headers,
           body: JSON.stringify({
             url, personas, rules,
             business_question, research_question, success_metrics,

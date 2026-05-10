@@ -111,6 +111,10 @@ async function runPersonaStations({
               toolName: chunk.toolName,
               args: chunk.args,
             });
+            // Track per-station issue count when recordIssue is called
+            if (chunk.toolName === 'recordIssue') {
+              checker.recordIssue(station.id);
+            }
           }
         }
 
@@ -177,13 +181,15 @@ async function runJob(jobId, projectRoot, abortControllers) {
     const userGoalMatch = configDoc.match(/## 用户任务目标（最高优先级）\n(.+)/);
     const userGoal = userGoalMatch ? userGoalMatch[1].trim() : '';
 
-    const issueSchema = fs.readFileSync(
-      path.join(projectRoot, 'schema', 'issue_schema.md'),
-      'utf8'
-    );
-
     // System prompt: static across all stations for KV cache reuse
-    let fullSystemPrompt = systemPrompt + '\n\n' + issueSchema;
+    let fullSystemPrompt = systemPrompt;
+
+    // Append issue schema if it exists (optional)
+    const issueSchemaPath = path.join(projectRoot, 'schema', 'issue_schema.md');
+    if (fs.existsSync(issueSchemaPath)) {
+      const issueSchema = fs.readFileSync(issueSchemaPath, 'utf8');
+      fullSystemPrompt += '\n\n' + issueSchema;
+    }
     if (job.plan?.user_prompt) {
       fullSystemPrompt += `\n\n## 用户补充指令\n${job.plan.user_prompt}`;
     }
@@ -341,12 +347,14 @@ function parsePersonaTable(markdown) {
 // Station-type evaluation guidance (progressive disclosure in user prompt)
 function getStationTypeGuidance(station) {
   const id = parseInt(station.id.replace('S', ''), 10);
-  if (id <= 1) return '## 评估重点: 首页\n关注价值传递、导航清晰度、新用户首印象';
-  if (id <= 3) return '## 评估重点: 搜索与详情\n关注搜索准确性、筛选逻辑、结果排序、信息层级';
-  if (id <= 5) return '## 评估重点: 轻定制\n关注信息层级、价格可读性、MOQ透明度、供应商信任';
-  if (id <= 7) return '## 评估重点: 重定制\n关注定制流程、MOQ/价格透明度、沟通入口、工厂能力展示';
-  if (id === 8) return '## 评估重点: 询盘\n关注表单合理性、沟通工具、响应预期';
-  return '## 评估重点: 供应商\n关注认证信息、工厂能力、信任建立';
+  const total = 9; // approximate max stations
+  const position = id / total;
+
+  if (position <= 0.15) return '## Evaluation Focus: Landing Page\nFocus on: value proposition clarity, navigation discoverability, first impression, load performance';
+  if (position <= 0.35) return '## Evaluation Focus: Discovery & Search\nFocus on: search accuracy, filter logic, result relevance, content discoverability';
+  if (position <= 0.55) return '## Evaluation Focus: Content & Detail\nFocus on: information hierarchy, content completeness, trust signals, readability';
+  if (position <= 0.75) return '## Evaluation Focus: Evaluation & Comparison\nFocus on: decision support, comparison tools, pricing clarity, social proof';
+  return '## Evaluation Focus: Conversion & Action\nFocus on: form usability, action clarity, feedback quality, error recovery';
 }
 
 // Build per-station prompt (personasDoc now contains only a single persona's doc)
@@ -481,6 +489,14 @@ async function generateReport(jobId, projectRoot) {
 <body>
   <h1>UX Walkthrough Report</h1>
   <div class="meta">${escHtml(job.url)} &mdash; ${new Date().toLocaleDateString()} &mdash; ${Array.isArray(job.personas) ? job.personas.join(', ') : ''}</div>`;
+
+  // Fallback warning banner (if plan was a fallback)
+  if (plan.fallback) {
+    html += `
+  <div style="background:#fff8e1;border:1px solid #f9a825;border-radius:8px;padding:12px 16px;margin-bottom:1.5rem;font-size:0.875rem;color:#6d4c00;line-height:1.5;">
+    <strong>Note:</strong> This walkthrough used a default template plan. Dynamic plan generation failed${plan.fallback_reason ? ': ' + escHtml(plan.fallback_reason) : ''}. Results may not be optimally tailored to the target site.
+  </div>`;
+  }
 
   // Executive summary
   if (summary) {

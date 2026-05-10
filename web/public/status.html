@@ -486,6 +486,22 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Fallback warning banner */
+    .fallback-banner {
+      display: none;
+      background: #fff8e1;
+      border: 1px solid #f9a825;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: #6d4c00;
+      line-height: 1.5;
+    }
+    .fallback-banner.show { display: block; }
+    .fallback-banner .fb-title { font-weight: 600; margin-bottom: 4px; }
+    .fallback-banner .fb-reason { font-size: 12px; color: #8b6914; margin-top: 4px; font-family: monospace; word-break: break-all; }
+
     /* Plan confirmation UI */
     .plan-station-list { list-style: none; margin: 0 0 16px; }
     .plan-station-item {
@@ -581,6 +597,11 @@
 
   <!-- Planning state: centered single-column -->
   <div class="planning-layout" id="planning-layout" style="display:none">
+    <div class="fallback-banner" id="fallback-banner">
+      <div class="fb-title">This plan was generated using a default template</div>
+      <div>Dynamic plan generation failed. The walkthrough may not be optimally tailored to the target site.</div>
+      <div class="fb-reason" id="fallback-reason"></div>
+    </div>
     <div class="card">
       <div class="job-header">
         <div>
@@ -1284,17 +1305,21 @@
     }
 
     // --- Plan station rendering ---
-    function renderPlanStations(stations, isFallback) {
+    function renderPlanStations(stations, isFallback, fallbackReason) {
       document.getElementById('plan-generating').style.display = 'none';
       const planList = document.getElementById('plan-station-list');
       planList.style.display = '';
       planList.innerHTML = '';
 
+      // Show prominent fallback banner
+      const banner = document.getElementById('fallback-banner');
       if (isFallback) {
-        const warn = document.createElement('li');
-        warn.style.cssText = 'color:#b45309;font-size:12px;padding:8px;background:#fffbeb;border-radius:6px;margin-bottom:8px;';
-        warn.textContent = '计划自动生成失败，已使用默认模板';
-        planList.appendChild(warn);
+        banner.classList.add('show');
+        if (fallbackReason) {
+          document.getElementById('fallback-reason').textContent = 'Reason: ' + fallbackReason;
+        }
+      } else {
+        banner.classList.remove('show');
       }
 
       stations.forEach(s => {
@@ -1516,7 +1541,7 @@
                   clearInterval(pollId);
                   STATIONS = j.plan?.stations || [];
                   STATIONS.forEach(s => { stationState[s.id] = { status: 'pending', issues: 0 }; });
-                  renderPlanStations(STATIONS, j.plan?.generated === false);
+                  renderPlanStations(STATIONS, j.plan?.fallback === true, j.plan?.fallback_reason);
                 }
               } catch (_) {}
             }, 2000);
@@ -1524,7 +1549,7 @@
             // Plan already generated — show stations
             STATIONS = job.plan?.stations || [];
             STATIONS.forEach(s => { stationState[s.id] = { status: 'pending', issues: 0 }; });
-            renderPlanStations(STATIONS, job.plan?.generated === false);
+            renderPlanStations(STATIONS, job.plan?.fallback === true, job.plan?.fallback_reason);
           }
 
           connectRealtime();

@@ -83,8 +83,18 @@ async function main() {
 
       // Generate plan asynchronously (does not block response)
       const { generatePlan } = require('./planner');
-      generatePlan(projectRoot, jobId, req.body).catch((err) => {
-        console.error(`Plan generation failed for ${jobId}:`, err);
+      generatePlan(projectRoot, jobId, req.body).catch(async (err) => {
+        console.error(`Plan generation fatal error for ${jobId}:`, err);
+        // Ensure job doesn't stay stuck in 'generating' state
+        try {
+          await updateJob(jobId, {
+            status: 'failed',
+            error_msg: `Plan generation crashed: ${err.message}`,
+            completed_at: new Date().toISOString(),
+            plan: { generating: false, generated: false, fallback: false, plan_source: 'none', fallback_reason: err.message },
+          });
+          jobEmitter.emit(`job:${jobId}`, { type: 'failed', error: err.message });
+        } catch (_) {}
       });
 
       res.json({ jobId, statusUrl: `/jobs/${jobId}` });
