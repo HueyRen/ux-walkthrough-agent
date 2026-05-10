@@ -225,11 +225,14 @@ async function runJob(jobId, projectRoot, abortControllers) {
     // Launch browser with anti-detection measures
     const proxyUrl = process.env.PROXY_URL; // e.g. http://user:pass@proxy.example.com:8080
     const launchOpts = {
-      headless: true,
+      headless: false,
+      channel: 'chrome',
       args: [
-        '--no-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
+        '--disable-sync',
+        '--disable-background-networking',
+        '--disable-default-apps',
+        '--disable-extensions',
+        '--no-first-run',
         '--disable-blink-features=AutomationControlled',
       ],
     };
