@@ -43,6 +43,11 @@ async function main() {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
   });
 
+  // GET /study → architecture overview
+  app.get('/study', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'study.html'));
+  });
+
   // GET /api/config — frontend Supabase config
   app.get('/api/config', (req, res) => {
     res.json({ supabaseUrl, supabaseAnonKey });
