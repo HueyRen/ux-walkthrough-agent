@@ -26,7 +26,7 @@ async function authMiddleware(req, res, next) {
     }
   }
   // Allow unauthenticated access — auth verification disabled for now
-  req.userId = req.userId || 'anonymous';
+  req.userId = req.userId || '00000000-0000-0000-0000-000000000000';
   req.userEmail = req.userEmail || 'anonymous@local';
   next();
 }
