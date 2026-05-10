@@ -1,57 +1,75 @@
 'use strict';
 
+require('dotenv').config();
+
 const express = require('express');
-const { WebSocketServer } = require('ws');
 const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
 
-const { initDb, createJob, getJob, updateJob, listJobs } = require('./db');
+const { initDb, createJob, getJob, listJobs } = require('./db');
 const { writeConfigs } = require('./config-writer');
+const { supabaseAdmin, supabaseUrl, supabaseAnonKey } = require('./supabase');
 
 const PORT = process.env.PORT || 3000;
 const projectRoot = path.resolve(__dirname, '..');
 
-// jobId → Set<WebSocket>
-const subscribers = new Map();
+// Auth middleware — verifies Supabase JWT
+async function authMiddleware(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: '未提供认证令牌' });
 
-function broadcast(jobId, event) {
-  const clients = subscribers.get(jobId);
-  if (!clients) return;
-  const msg = JSON.stringify(event);
-  for (const ws of clients) {
-    if (ws.readyState === 1) ws.send(msg);
-  }
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) return res.status(401).json({ error: '认证无效' });
+
+  req.userId = user.id;
+  req.userEmail = user.email;
+  next();
 }
 
 async function main() {
-  initDb();
+  await initDb();
 
   const { createWorker } = require('./worker');
-  const worker = createWorker(projectRoot, broadcast);
+  const worker = createWorker(projectRoot);
 
   const app = express();
   app.use(express.json());
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/outputs', express.static(path.join(projectRoot, 'outputs')));
 
-  // GET / → index.html (handled by express.static above, but explicit fallback)
+  // GET / → index.html
   app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
   });
 
-  // POST /jobs — submit a new walkthrough job
-  app.post('/jobs', async (req, res) => {
+  // GET /api/config — frontend Supabase config
+  app.get('/api/config', (req, res) => {
+    res.json({ supabaseUrl, supabaseAnonKey });
+  });
+
+  // POST /jobs — submit a new walkthrough job (auth required)
+  app.post('/jobs', authMiddleware, async (req, res) => {
     try {
-      const { submitter, url, personas, rules } = req.body;
-      if (!submitter || !url || !personas) {
-        return res.status(400).json({ error: '缺少必填字段: submitter, url, personas' });
+      const { url, personas, rules, model } = req.body;
+      if (!url || !personas) {
+        return res.status(400).json({ error: '缺少必填字段: url, personas' });
       }
 
       const jobId = crypto.randomBytes(3).toString('hex');
 
-      await writeConfigs(projectRoot, jobId, req.body);
-      createJob({ id: jobId, submitter, url, personas, rules });
+      await writeConfigs(projectRoot, jobId, {
+        ...req.body,
+        submitter: req.userEmail,
+      });
+      await createJob({
+        id: jobId,
+        user_id: req.userId,
+        url,
+        personas,
+        rules,
+        model,
+      });
       worker.enqueue(jobId);
 
       res.json({ jobId, statusUrl: `/jobs/${jobId}` });
@@ -67,7 +85,7 @@ async function main() {
   });
 
   // GET /jobs — history page or JSON
-  app.get('/jobs', (req, res) => {
+  app.get('/jobs', async (req, res) => {
     try {
       const hasQueryParams = Object.keys(req.query).length > 0;
       const wantsJson = req.accepts(['html', 'json']) === 'json' || hasQueryParams;
@@ -76,8 +94,8 @@ async function main() {
         return res.sendFile(path.join(__dirname, 'public', 'history.html'));
       }
 
-      const { submitter, limit = 50, offset = 0 } = req.query;
-      const jobs = listJobs({ submitter, limit: Number(limit), offset: Number(offset) });
+      const { limit = 50, offset = 0 } = req.query;
+      const jobs = await listJobs({ limit: Number(limit), offset: Number(offset) });
       res.json(jobs);
     } catch (err) {
       console.error('GET /jobs error:', err);
@@ -94,10 +112,10 @@ async function main() {
   });
 
   // GET /api/jobs — JSON job listing
-  app.get('/api/jobs', (req, res) => {
+  app.get('/api/jobs', async (req, res) => {
     try {
-      const { submitter, limit = 50, offset = 0 } = req.query;
-      const jobs = listJobs({ submitter, limit: Number(limit), offset: Number(offset) });
+      const { limit = 50, offset = 0 } = req.query;
+      const jobs = await listJobs({ limit: Number(limit), offset: Number(offset) });
       res.json(jobs);
     } catch (err) {
       console.error('GET /api/jobs error:', err);
@@ -106,9 +124,9 @@ async function main() {
   });
 
   // GET /api/jobs/:id — JSON single job
-  app.get('/api/jobs/:id', (req, res) => {
+  app.get('/api/jobs/:id', async (req, res) => {
     try {
-      const job = getJob(req.params.id);
+      const job = await getJob(req.params.id);
       if (!job) return res.status(404).json({ error: '任务不存在' });
       res.json(job);
     } catch (err) {
@@ -117,37 +135,8 @@ async function main() {
     }
   });
 
-  // HTTP server + WebSocket on same port
+  // HTTP server (no WebSocket)
   const server = http.createServer(app);
-  const wss = new WebSocketServer({ server, path: '/ws' });
-
-  wss.on('connection', (ws, req) => {
-    const params = new URLSearchParams(req.url.replace('/ws?', ''));
-    const jobId = params.get('jobId');
-
-    if (!jobId) {
-      ws.close(1008, 'Missing jobId');
-      return;
-    }
-
-    // Register subscriber
-    if (!subscribers.has(jobId)) subscribers.set(jobId, new Set());
-    subscribers.get(jobId).add(ws);
-
-    // Send current job state immediately
-    try {
-      const job = getJob(jobId);
-      if (job) ws.send(JSON.stringify({ type: 'state', payload: job }));
-    } catch (_) {}
-
-    ws.on('close', () => {
-      const clients = subscribers.get(jobId);
-      if (clients) {
-        clients.delete(ws);
-        if (clients.size === 0) subscribers.delete(jobId);
-      }
-    });
-  });
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`UX Walkthrough server running at http://0.0.0.0:${PORT}`);

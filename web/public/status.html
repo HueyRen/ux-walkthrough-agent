@@ -80,6 +80,7 @@
     .status-badge.done    { background: #d4edda; color: #155724; }
     .status-badge.failed  { background: #f8d7da; color: #721c24; }
     .status-badge.timeout { background: #fff3cd; color: #856404; }
+    .status-badge.partial { background: #fff3cd; color: #856404; }
 
     /* Progress bar */
     .progress-wrap {
@@ -305,6 +306,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/app.js"></script>
   <script>
     const STATIONS = [
@@ -328,8 +330,6 @@
     let stationState = {}; // stationId -> { status: 'done'|'current'|'pending', issues: 0 }
     let totalIssues = 0;
     let completedStations = 0;
-    let ws = null;
-
     // Initialize station state
     STATIONS.forEach(s => {
       stationState[s.id] = { status: 'pending', issues: 0 };
@@ -409,7 +409,8 @@
         running: '执行中',
         done: '完成',
         failed: '失败',
-        timeout: '超时'
+        timeout: '超时',
+        partial: '部分完成'
       };
       elBadge.textContent = labels[status] || status;
     }
@@ -463,81 +464,53 @@
       }
     }
 
-    function connectWebSocket() {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(`${proto}://${location.host}/ws?jobId=${jobId}`);
+    async function connectRealtime() {
+      try {
+        const configRes = await fetch('/api/config');
+        const { supabaseUrl, supabaseAnonKey } = await configRes.json();
+        const sb = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-      ws.onmessage = (e) => {
-        let msg;
-        try { msg = JSON.parse(e.data); } catch { return; }
-        const { type, payload } = msg;
+        sb.channel(`job-${jobId}`)
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'jobs',
+            filter: `id=eq.${jobId}`,
+          }, (payload) => {
+            const job = payload.new;
 
-        switch (type) {
-          case 'state': {
-            // Initial state from DB on WS connect
-            applyInitialState(payload);
-            break;
-          }
-          case 'station': {
-            // payload: { stationId, status }
-            const sid = payload.stationId;
-            if (stationState[sid]) {
-              stationState[sid].status = payload.status;
-            }
-            completedStations = Object.values(stationState).filter(s => s.status === 'done').length;
-            renderStationList();
-            updateProgressBar(completedStations, STATIONS.length, totalIssues, null);
-            setStatusBadge('running');
-            break;
-          }
-          case 'screenshot': {
-            addScreenshotThumb(payload);
-            break;
-          }
-          case 'issue': {
-            totalIssues++;
-            const sid = payload && payload.stationId;
-            if (sid && stationState[sid]) {
-              stationState[sid].issues = (stationState[sid].issues || 0) + 1;
+            // Update progress from the JSONB progress column
+            if (job.progress && job.progress.stations) {
+              const p = job.progress;
+              for (const [sid, info] of Object.entries(p.stations)) {
+                if (stationState[sid]) {
+                  stationState[sid].status = info.status;
+                  stationState[sid].issues = info.issues || 0;
+                }
+              }
+              completedStations = p.completed || 0;
+              totalIssues = job.issue_count || 0;
               renderStationList();
+              updateProgressBar(p.completed || 0, p.total || STATIONS.length, totalIssues, null);
             }
-            updateProgressBar(completedStations, STATIONS.length, totalIssues, null);
-            break;
-          }
-          case 'progress': {
-            // payload: { completed, total, issues }
-            if (payload.completed != null) completedStations = payload.completed;
-            if (payload.issues != null) totalIssues = payload.issues;
-            updateProgressBar(
-              payload.completed ?? completedStations,
-              payload.total ?? STATIONS.length,
-              payload.issues ?? totalIssues,
-              null
-            );
-            setStatusBadge('running');
-            break;
-          }
-          case 'done': {
-            showDownloadButton(payload && payload.reportUrl);
-            if (ws) ws.close();
-            break;
-          }
-          case 'failed': {
-            showError(payload && payload.error, false);
-            if (ws) ws.close();
-            break;
-          }
-          case 'timeout': {
-            showError(payload && payload.error, true);
-            if (ws) ws.close();
-            break;
-          }
-        }
-      };
 
-      ws.onerror = () => {
-        // Silently ignore WS errors; job status is already shown from HTTP fetch
-      };
+            setStatusBadge(job.status);
+
+            if (job.status === 'done') {
+              showDownloadButton(job.report_url);
+            } else if (job.status === 'failed') {
+              showError(job.error_msg, false);
+            } else if (job.status === 'timeout') {
+              showError(job.error_msg, true);
+            } else if (job.status === 'partial') {
+              showDownloadButton(job.report_url);
+              showError('部分站点执行失败，已生成可用报告', false);
+            }
+          })
+          .subscribe();
+      } catch (err) {
+        console.error('Realtime connection failed:', err);
+      }
     }
 
     // Retry button
@@ -546,11 +519,19 @@
       elRetryBtn.disabled = true;
       elRetryBtn.textContent = '提交中...';
       try {
+        // Get auth session for retry
+        const configRes = await fetch('/api/config');
+        const { supabaseUrl, supabaseAnonKey } = await configRes.json();
+        const sb = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+        const { data: { session } } = await sb.auth.getSession();
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (session) headers['Authorization'] = `Bearer ${session.access_token}`;
+
         const res = await fetch('/jobs', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
-            submitter: jobData.submitter,
             url: jobData.url,
             personas: jobData.personas,
             rules: jobData.rules
@@ -582,9 +563,9 @@
         const job = await res.json();
         applyInitialState(job);
 
-        // Connect WS only if job is still active
+        // Connect Realtime only if job is still active
         if (job.status === 'queued' || job.status === 'running') {
-          connectWebSocket();
+          connectRealtime();
         }
       } catch (err) {
         elProgressLabel.textContent = '加载失败，请刷新页面重试';

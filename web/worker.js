@@ -1,13 +1,16 @@
 'use strict';
 
-const { spawn } = require('child_process');
-const { createParser } = require('./stdout-parser');
-const { updateJob, incrementIssueCount } = require('./db');
+const { generateText } = require('ai');
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+const { getModel } = require('./models');
+const { getJob, updateJob } = require('./db');
+const { WalkthroughChecker } = require('./checker');
+const { createPlaywrightTools } = require('./tools');
+const { supabaseAdmin } = require('./supabase');
 
-const TOTAL_STATIONS = 9;
-const JOB_TIMEOUT_MS = 2700000; // 45 minutes
-
-function createWorker(projectRoot, emitter) {
+function createWorker(projectRoot) {
   let queue;
 
   async function getQueue() {
@@ -19,146 +22,272 @@ function createWorker(projectRoot, emitter) {
   }
 
   function enqueue(jobId) {
-    getQueue().then(q => {
-      q.add(() => runJob(jobId, projectRoot, emitter));
+    getQueue().then((q) => {
+      q.add(() => runJob(jobId, projectRoot));
     });
   }
 
   return { enqueue };
 }
 
-async function runJob(jobId, projectRoot, emitter) {
-  // Mark job as running
-  updateJob(jobId, { status: 'running', started_at: new Date().toISOString() });
+async function runJob(jobId, projectRoot) {
+  try {
+    await updateJob(jobId, { status: 'running', started_at: new Date().toISOString() });
 
-  const prompt = `You are executing a UX walkthrough. The config files are at instances/${jobId}/.
-Read these files:
-- instances/${jobId}/system_instructions.md (your role and evaluation rules)
-- instances/${jobId}/personas.md (the user personas to evaluate as)
-- instances/${jobId}/task_card.md (the station route to follow)
-- instances/${jobId}/config.md (project metadata)
+    // Read instance config files
+    const instanceDir = path.join(projectRoot, 'instances', jobId);
+    const systemPrompt = fs.readFileSync(
+      path.join(instanceDir, 'system_instructions.md'),
+      'utf8'
+    );
+    const personasDoc = fs.readFileSync(path.join(instanceDir, 'personas.md'), 'utf8');
+    const taskCardDoc = fs.readFileSync(path.join(instanceDir, 'task_card.md'), 'utf8');
+    const issueSchema = fs.readFileSync(
+      path.join(projectRoot, 'schema', 'issue_schema.md'),
+      'utf8'
+    );
 
-Execute Phase B of the walkthrough: visit each station in the task card, evaluate using the personas, take screenshots, record issues per the schema in schema/issue_schema.md, and write all outputs to outputs/${jobId}/.
+    const stations = parseTaskCard(taskCardDoc);
+    const job = await getJob(jobId);
+    const model = getModel(job.model || 'claude-sonnet');
 
-IMPORTANT - Progress reporting: You MUST print these markers to stdout so the web dashboard can track progress:
-- When entering a new station, print: ## S{number} {station name}
-  Example: ## S1 首页着陆
-- When saving a screenshot, print the filename on its own line
-  Example: r1_s1_step01_homepage_landing.png
-- When recording an issue, print the issue ID on its own line
-  Example: P-S1-01
-- When finished, print: Writing manifest.json
-
-At the end, generate outputs/${jobId}/raw_report.html and outputs/${jobId}/manifest.json.`;
-
-  const child = spawn('claude', ['-p', '--allowedTools', '*', '--dangerously-skip-permissions'], {
-    cwd: projectRoot,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    detached: true,
-  });
-
-  // Write prompt to stdin and close it
-  child.stdin.write(prompt);
-  child.stdin.end();
-
-  let stationCount = 0;
-  let currentStation = null;
-  let completedReceived = false;
-  let finished = false;
-  let lineBuffer = '';
-  let issueCount = 0;
-
-  const processLine = createParser((event) => {
-    if (event.type === 'issue') {
-      issueCount++;
-      incrementIssueCount(jobId);
-      emitter(jobId, { type: 'issue', payload: { id: event.payload.id, stationId: currentStation } });
-      return;
-    }
-
-    if (event.type === 'station') {
-      // Mark previous station as done
-      if (currentStation) {
-        emitter(jobId, { type: 'station', payload: { stationId: currentStation, status: 'done' } });
-      }
-      stationCount++;
-      currentStation = event.payload.station;
-      // Mark new station as current
-      emitter(jobId, { type: 'station', payload: { stationId: currentStation, status: 'current' } });
-      emitter(jobId, {
-        type: 'progress',
-        payload: { completed: stationCount - 1, total: TOTAL_STATIONS, issues: issueCount },
-      });
-      return;
-    }
-
-    if (event.type === 'complete') {
-      completedReceived = true;
-      // Mark last station as done
-      if (currentStation) {
-        emitter(jobId, { type: 'station', payload: { stationId: currentStation, status: 'done' } });
-      }
-    }
-
-    if (event.type === 'screenshot') {
-      emitter(jobId, { type: 'screenshot', payload: { file: event.payload.file, stationId: currentStation } });
-      return;
-    }
-
-    emitter(jobId, event);
-  });
-
-  child.stdout.on('data', (chunk) => {
-    lineBuffer += chunk.toString();
-    const lines = lineBuffer.split('\n');
-    lineBuffer = lines.pop(); // keep the incomplete last chunk
-    for (const line of lines) {
-      processLine(line);
-    }
-  });
-
-  // Drain stderr (prevent pipe buffer blocking)
-  child.stderr.on('data', () => {});
-
-  // Set timeout
-  const timer = setTimeout(() => {
-    if (finished) return;
-    finished = true;
-    try {
-      process.kill(-child.pid, 'SIGTERM');
-    } catch (_) {}
-    updateJob(jobId, { status: 'timeout', error_msg: '执行超时（30分钟）' });
-    emitter(jobId, { type: 'timeout', payload: { error: '执行超时（30分钟）' } });
-  }, JOB_TIMEOUT_MS);
-
-  await new Promise((resolve) => {
-    child.on('exit', (code) => {
-      if (finished) return resolve();
-      finished = true;
-      clearTimeout(timer);
-
-      // Flush any remaining buffer
-      if (lineBuffer.trim()) processLine(lineBuffer);
-
-      if (code === 0 && completedReceived) {
-        updateJob(jobId, {
-          status: 'done',
-          completed_at: new Date().toISOString(),
-          output_path: `outputs/${jobId}/raw_report.html`,
-        });
-        emitter(jobId, { type: 'done', payload: { reportUrl: `/reports/${jobId}` } });
-      } else {
-        const errorMsg = code === 0 ? '未收到完成信号' : `进程退出，代码 ${code}`;
-        updateJob(jobId, {
-          status: 'failed',
-          error_msg: errorMsg,
-        });
-        emitter(jobId, { type: 'failed', payload: { error: errorMsg } });
-      }
-
-      resolve();
+    // Launch browser
+    const browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
-  });
+
+    const { tools, newContext, closeContext } = createPlaywrightTools(
+      browser,
+      jobId,
+      supabaseAdmin
+    );
+
+    const checker = new WalkthroughChecker(stations);
+
+    // Per-station execution loop
+    for (const station of stations) {
+      if (checker.shouldHalt()) break;
+
+      checker.setCurrent(station.id);
+      await updateJob(jobId, { progress: checker.toProgress() });
+
+      await newContext();
+
+      let retryCount = 0;
+      let stationDone = false;
+
+      while (retryCount <= 2 && !stationDone) {
+        try {
+          const stationPrompt = buildStationPrompt(station, personasDoc, job);
+
+          await generateText({
+            model,
+            system: [systemPrompt, issueSchema].join('\n\n---\n\n'),
+            prompt: stationPrompt,
+            tools,
+            maxSteps: 50,
+            maxTokens: 4096,
+          });
+
+          checker.recordComplete(station.id);
+          stationDone = true;
+        } catch (err) {
+          console.error(`Station ${station.id} error (attempt ${retryCount + 1}):`, err.message);
+          const classification = checker.recordError(station.id, err);
+          if (classification.shouldRetry) {
+            retryCount++;
+            await closeContext();
+            await newContext();
+          } else {
+            break;
+          }
+        }
+      }
+
+      await closeContext();
+      await updateJob(jobId, { progress: checker.toProgress() });
+    }
+
+    // Generate report
+    await generateReport(jobId, projectRoot);
+
+    // Final status
+    const finalStatus = checker.finalStatus();
+    await updateJob(jobId, {
+      status: finalStatus,
+      completed_at: new Date().toISOString(),
+      report_url: `/reports/${jobId}`,
+    });
+
+    await browser.close();
+  } catch (err) {
+    console.error(`Job ${jobId} fatal error:`, err);
+    await updateJob(jobId, {
+      status: 'failed',
+      error_msg: err.message,
+    }).catch(() => {});
+  }
+}
+
+// Parse task card markdown into structured stations
+function parseTaskCard(markdown) {
+  const stations = [];
+  const stationRegex = /^## 站点\s*(\d+):\s*(.+?)(?:\s*\(.*?\))?\s*$/gm;
+  let match;
+
+  while ((match = stationRegex.exec(markdown)) !== null) {
+    const num = parseInt(match[1], 10);
+    const name = match[2].trim();
+    stations.push({
+      id: `S${num}`,
+      name,
+    });
+  }
+
+  // Extract the content for each station (everything between two ## 站点 headers)
+  for (let i = 0; i < stations.length; i++) {
+    const startPattern = `## 站点 ${stations[i].id.replace('S', '')}:`;
+    const startIdx = markdown.indexOf(startPattern);
+    let endIdx;
+    if (i + 1 < stations.length) {
+      const nextPattern = `## 站点 ${stations[i + 1].id.replace('S', '')}:`;
+      endIdx = markdown.indexOf(nextPattern);
+    } else {
+      endIdx = markdown.length;
+    }
+    stations[i].content = markdown.slice(startIdx, endIdx).trim();
+  }
+
+  return stations;
+}
+
+// Build per-station prompt
+function buildStationPrompt(station, personasDoc, job) {
+  return `You are now executing Station ${station.id}: ${station.name}
+
+## Target URL
+${job.url}
+
+## Your Task
+Follow the operation steps below for this station. For each step:
+1. Execute the action using the browser tools (navigate, click, type, scroll, evaluate)
+2. Take a screenshot using the screenshot tool after each significant action
+3. Evaluate the UX from each persona's perspective
+4. Record any issues found using the recordIssue tool
+
+## Station Instructions
+${station.content}
+
+## Personas for This Walkthrough
+${personasDoc}
+
+## Important Rules
+- Take screenshots at every step documented in the station instructions
+- Use the recordIssue tool for EVERY issue you discover — do not just describe issues in text
+- Issue IDs must follow the format P-${station.id}-XX (e.g., P-${station.id}-01)
+- Evaluate from ALL personas listed in the station instructions
+- Be thorough: check visual hierarchy, information architecture, interaction patterns, and accessibility
+- Write issue descriptions in first person from the affected persona's perspective`;
+}
+
+// Generate HTML report from findings
+async function generateReport(jobId, projectRoot) {
+  const { data: findings } = await supabaseAdmin
+    .from('findings')
+    .select('*')
+    .eq('job_id', jobId)
+    .order('created_at', { ascending: true });
+
+  if (!findings || findings.length === 0) return;
+
+  const job = await getJob(jobId);
+
+  // Group findings by station
+  const byStation = {};
+  for (const f of findings) {
+    if (!byStation[f.station]) byStation[f.station] = [];
+    byStation[f.station].push(f);
+  }
+
+  const severityColor = { P0: '#dc2626', P1: '#ea580c', P2: '#ca8a04', P3: '#65a30d' };
+
+  let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UX Walkthrough Report — ${job.url}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 960px; margin: 0 auto; padding: 2rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .meta { color: #666; margin-bottom: 2rem; font-size: 0.875rem; }
+    .summary { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+    .stat { background: #f5f5f5; padding: 1rem; border-radius: 8px; min-width: 120px; text-align: center; }
+    .stat .num { font-size: 1.5rem; font-weight: 700; }
+    .stat .label { font-size: 0.75rem; color: #666; text-transform: uppercase; }
+    .station { margin-bottom: 2rem; }
+    .station h2 { font-size: 1.125rem; border-bottom: 2px solid #e5e5e5; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+    .issue { border: 1px solid #e5e5e5; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+    .issue-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .severity { padding: 2px 8px; border-radius: 4px; color: white; font-size: 0.75rem; font-weight: 600; }
+    .issue h3 { font-size: 0.95rem; }
+    .issue p { font-size: 0.875rem; color: #444; margin-top: 0.25rem; }
+    .issue .personas { font-size: 0.75rem; color: #888; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>UX Walkthrough Report</h1>
+  <div class="meta">${job.url} &mdash; ${new Date().toLocaleDateString()}</div>
+  <div class="summary">
+    <div class="stat"><div class="num">${findings.length}</div><div class="label">Issues</div></div>
+    <div class="stat"><div class="num">${findings.filter(f => f.severity === 'P0').length}</div><div class="label">P0 Blockers</div></div>
+    <div class="stat"><div class="num">${findings.filter(f => f.severity === 'P1').length}</div><div class="label">P1 Severe</div></div>
+    <div class="stat"><div class="num">${Object.keys(byStation).length}</div><div class="label">Stations</div></div>
+  </div>`;
+
+  for (const [station, issues] of Object.entries(byStation)) {
+    html += `\n  <div class="station">
+    <h2>${station}</h2>`;
+    for (const issue of issues) {
+      const raw = issue.raw_data || {};
+      const color = severityColor[issue.severity] || '#888';
+      html += `
+    <div class="issue">
+      <div class="issue-header">
+        <span class="severity" style="background:${color}">${issue.severity}</span>
+        <h3>${issue.id}: ${raw.title || issue.description?.slice(0, 60) || ''}</h3>
+      </div>
+      <p>${issue.description || ''}</p>
+      <div class="personas">${issue.persona || ''} · ${raw.classification || ''}</div>
+    </div>`;
+    }
+    html += '\n  </div>';
+  }
+
+  html += '\n</body>\n</html>\n';
+
+  // Save report to filesystem
+  const outputDir = path.join(projectRoot, 'outputs', jobId);
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(path.join(outputDir, 'raw_report.html'), html, 'utf8');
+
+  // Also write manifest
+  const manifest = {
+    job_id: jobId,
+    url: job.url,
+    total_issues: findings.length,
+    by_severity: {
+      P0: findings.filter((f) => f.severity === 'P0').length,
+      P1: findings.filter((f) => f.severity === 'P1').length,
+      P2: findings.filter((f) => f.severity === 'P2').length,
+      P3: findings.filter((f) => f.severity === 'P3').length,
+    },
+    stations_covered: Object.keys(byStation).length,
+    generated_at: new Date().toISOString(),
+  };
+  fs.writeFileSync(path.join(outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
 }
 
 module.exports = { createWorker };

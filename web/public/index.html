@@ -211,17 +211,6 @@
 
     <form id="walkthrough-form">
       <div class="form-group">
-        <label for="submitter">你的名字 / 邮箱</label>
-        <input
-          type="text"
-          id="submitter"
-          name="submitter"
-          placeholder="用于通知和任务追踪"
-          required
-        >
-      </div>
-
-      <div class="form-group">
         <label for="url">目标网站 URL</label>
         <input
           type="url"
@@ -311,14 +300,103 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/app.js"></script>
   <script>
+    let supabaseClient = null;
+    let session = null;
+
     const chips = document.querySelectorAll('.chip');
     const form = document.getElementById('walkthrough-form');
     const submitBtn = document.getElementById('submit-btn');
     const errorMsg = document.getElementById('error-msg');
-
     const customTextarea = document.getElementById('custom_persona');
+
+    // Auth UI
+    const authSection = document.createElement('div');
+    authSection.id = 'auth-section';
+    authSection.innerHTML = `
+      <div class="form-group">
+        <label for="auth-email">登录邮箱</label>
+        <input type="text" id="auth-email" placeholder="your@email.com">
+      </div>
+      <button type="button" class="submit-btn" id="auth-btn">发送登录链接</button>
+      <p class="error-msg" id="auth-error" style="display:none"></p>
+      <p style="font-size:12px;color:#999;margin-top:8px;text-align:center">
+        首次使用？输入邮箱即可注册
+      </p>
+    `;
+
+    async function initAuth() {
+      try {
+        const configRes = await fetch('/api/config');
+        const { supabaseUrl, supabaseAnonKey } = await configRes.json();
+        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+        const { data: { session: existingSession } } = await supabaseClient.auth.getSession();
+        if (existingSession) {
+          session = existingSession;
+          showForm();
+        } else {
+          showAuth();
+        }
+
+        // Listen for auth state changes (magic link callback)
+        supabaseClient.auth.onAuthStateChange((event, newSession) => {
+          if (event === 'SIGNED_IN' && newSession) {
+            session = newSession;
+            showForm();
+          }
+        });
+      } catch (err) {
+        console.error('Auth init failed:', err);
+        showAuth();
+      }
+    }
+
+    function showAuth() {
+      form.style.display = 'none';
+      const card = document.querySelector('.card');
+      if (!document.getElementById('auth-section')) {
+        card.insertBefore(authSection, form);
+      }
+      authSection.style.display = 'block';
+
+      document.getElementById('auth-btn').addEventListener('click', async () => {
+        const email = document.getElementById('auth-email').value.trim();
+        const authError = document.getElementById('auth-error');
+        if (!email) {
+          authError.textContent = '请输入邮箱';
+          authError.style.display = 'block';
+          return;
+        }
+        const btn = document.getElementById('auth-btn');
+        btn.disabled = true;
+        btn.textContent = '发送中...';
+        authError.style.display = 'none';
+
+        const { error } = await supabaseClient.auth.signInWithOtp({
+          email,
+          options: { emailRedirectTo: window.location.origin }
+        });
+
+        if (error) {
+          authError.textContent = error.message;
+          authError.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = '发送登录链接';
+        } else {
+          btn.textContent = '已发送，请查收邮箱';
+        }
+      });
+    }
+
+    function showForm() {
+      if (document.getElementById('auth-section')) {
+        authSection.style.display = 'none';
+      }
+      form.style.display = 'block';
+    }
 
     // Chip toggle behavior
     chips.forEach(chip => {
@@ -343,7 +421,12 @@
       e.preventDefault();
       errorMsg.style.display = 'none';
 
-      const submitter = document.getElementById('submitter').value.trim();
+      if (!session) {
+        errorMsg.textContent = '请先登录';
+        errorMsg.style.display = 'block';
+        return;
+      }
+
       const url = document.getElementById('url').value.trim();
       const rules = document.getElementById('rules').value;
       const personas = Array.from(document.querySelectorAll('.chip.selected'))
@@ -367,9 +450,12 @@
       try {
         const res = await fetch('/jobs', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
           body: JSON.stringify({
-            submitter, url, personas, rules,
+            url, personas, rules,
             business_question, research_question, success_metrics,
             in_scope, custom_persona,
           })
@@ -377,7 +463,7 @@
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.message || `服务器错误 (${res.status})`);
+          throw new Error(err.error || `服务器错误 (${res.status})`);
         }
 
         const { jobId } = await res.json();
@@ -389,6 +475,8 @@
         submitBtn.textContent = '开始走查 →';
       }
     });
+
+    initAuth();
   </script>
 </body>
 </html>

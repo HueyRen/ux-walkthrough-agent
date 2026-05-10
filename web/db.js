@@ -1,84 +1,60 @@
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const { supabaseAdmin } = require('./supabase');
 
-const DB_PATH = path.join(__dirname, 'jobs.json');
-
-let jobs = [];
-
-function load() {
-  try {
-    if (fs.existsSync(DB_PATH)) {
-      jobs = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-    }
-  } catch (_) {
-    jobs = [];
-  }
+async function initDb() {
+  // Mark any interrupted jobs as failed on startup
+  await supabaseAdmin
+    .from('jobs')
+    .update({ status: 'failed', error_msg: '服务器重启，任务中断' })
+    .eq('status', 'running');
 }
 
-function save() {
-  fs.writeFileSync(DB_PATH, JSON.stringify(jobs, null, 2), 'utf8');
-}
-
-function initDb() {
-  load();
-  // Startup reconciliation: mark orphaned running jobs as failed
-  let changed = false;
-  for (const job of jobs) {
-    if (job.status === 'running') {
-      job.status = 'failed';
-      job.error_msg = '服务器重启，任务中断';
-      changed = true;
-    }
-  }
-  if (changed) save();
-}
-
-function createJob({ id, submitter, url, personas, rules }) {
-  const job = {
+async function createJob({ id, user_id, url, personas, rules, model }) {
+  const { error } = await supabaseAdmin.from('jobs').insert({
     id,
-    submitter,
+    user_id,
     url,
     personas: Array.isArray(personas) ? personas : JSON.parse(personas),
     rules: rules || 'b2b_ecommerce',
+    model: model || 'claude-sonnet',
     status: 'queued',
     created_at: new Date().toISOString(),
-    started_at: null,
-    completed_at: null,
-    output_path: null,
-    issue_count: 0,
-    error_msg: null,
-    retry_of: null,
-  };
-  jobs.unshift(job);
-  save();
+  });
+  if (error) throw new Error(`createJob failed: ${error.message}`);
 }
 
-function getJob(id) {
-  return jobs.find(j => j.id === id) || null;
+async function getJob(id) {
+  const { data, error } = await supabaseAdmin
+    .from('jobs')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) return null;
+  return data;
 }
 
-function updateJob(id, updates) {
-  const job = jobs.find(j => j.id === id);
-  if (!job) return;
-  Object.assign(job, updates);
-  save();
+async function updateJob(id, updates) {
+  const { error } = await supabaseAdmin
+    .from('jobs')
+    .update(updates)
+    .eq('id', id);
+  if (error) throw new Error(`updateJob failed: ${error.message}`);
 }
 
-function incrementIssueCount(id) {
-  const job = jobs.find(j => j.id === id);
-  if (!job) return;
-  job.issue_count = (job.issue_count || 0) + 1;
-  save();
+async function incrementIssueCount(id) {
+  const { error } = await supabaseAdmin.rpc('increment_issue_count', { job_id: id });
+  if (error) throw new Error(`incrementIssueCount failed: ${error.message}`);
 }
 
-function listJobs({ submitter, limit = 50, offset = 0 } = {}) {
-  let filtered = jobs;
-  if (submitter) {
-    filtered = jobs.filter(j => j.submitter === submitter);
-  }
-  return filtered.slice(offset, offset + limit);
+async function listJobs({ limit = 50, offset = 0 } = {}) {
+  const { data, error } = await supabaseAdmin
+    .from('jobs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw new Error(`listJobs failed: ${error.message}`);
+  return data;
 }
 
 module.exports = { initDb, createJob, getJob, updateJob, incrementIssueCount, listJobs };
