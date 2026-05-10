@@ -1,7 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 
-function writeConfigs(projectRoot, jobId, { url, submitter, personas, rules }) {
+function writeConfigs(projectRoot, jobId, {
+  url, submitter, personas, rules,
+  business_question, research_question, success_metrics,
+  in_scope, custom_persona,
+}) {
   const src = path.join(projectRoot, 'instances', 'alibaba-b2b');
   const dest = path.join(projectRoot, 'instances', jobId);
 
@@ -25,7 +29,7 @@ function writeConfigs(projectRoot, jobId, { url, submitter, personas, rules }) {
   );
 
   // 4. config.md
-  const config = [
+  const configLines = [
     '# Walkthrough Config',
     `- Job ID: ${jobId}`,
     `- Submitter: ${submitter}`,
@@ -33,7 +37,25 @@ function writeConfigs(projectRoot, jobId, { url, submitter, personas, rules }) {
     `- Personas: ${personas.join(', ')}`,
     `- Rules: ${rules}`,
     `- Date: ${new Date().toISOString()}`,
-  ].join('\n') + '\n';
+    '',
+    '## Research Objectives',
+    `### Business Question`,
+    business_question || '(未填写)',
+    '',
+    `### Research Question`,
+    research_question || '(未填写)',
+    '',
+    `### Success Metrics`,
+    success_metrics || '(未填写)',
+    '',
+    '## Scope',
+    `### In Scope`,
+    in_scope || '(未填写)',
+  ];
+  if (custom_persona) {
+    configLines.push('', '## Custom Persona', custom_persona);
+  }
+  const config = configLines.join('\n') + '\n';
 
   fs.writeFileSync(path.join(dest, 'config.md'), config, 'utf8');
 }

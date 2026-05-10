@@ -69,10 +69,42 @@
       outline: none;
     }
 
+    textarea {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1.5px solid #d0d0d0;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      color: #333;
+      background: #fff;
+      transition: border-color 0.15s;
+      outline: none;
+      resize: vertical;
+      min-height: 60px;
+    }
+
     input[type="text"]:focus,
     input[type="url"]:focus,
-    select:focus {
+    select:focus,
+    textarea:focus {
       border-color: #4a90d9;
+    }
+
+    textarea::placeholder {
+      color: #aaa;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      margin-top: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #eee;
     }
 
     input::placeholder {
@@ -201,14 +233,66 @@
         <small>v1 仅支持 alibaba.com 域名</small>
       </div>
 
+      <p class="section-label">研究目标</p>
+
+      <div class="form-group">
+        <label for="business_question">业务问题</label>
+        <textarea
+          id="business_question"
+          name="business_question"
+          placeholder="这次测试要回答什么业务问题？"
+          rows="2"
+        ></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="research_question">研究问题</label>
+        <textarea
+          id="research_question"
+          name="research_question"
+          placeholder="转化为可观察的研究问题"
+          rows="2"
+        ></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="success_metrics">成功指标</label>
+        <textarea
+          id="success_metrics"
+          name="success_metrics"
+          placeholder="怎样算「通过」？"
+          rows="2"
+        ></textarea>
+      </div>
+
+      <p class="section-label">测试范围</p>
+
+      <div class="form-group">
+        <label for="in_scope">In Scope</label>
+        <textarea
+          id="in_scope"
+          name="in_scope"
+          placeholder="具体哪些 flow / feature"
+          rows="2"
+        ></textarea>
+      </div>
+
       <div class="form-group">
         <label>选择用户画像 <span style="font-weight:400;color:#999">（可多选）</span></label>
         <div class="persona-chips">
           <button type="button" class="chip selected" data-persona="Lisa">Lisa（新买家）</button>
           <button type="button" class="chip selected" data-persona="Carlos">Carlos（经验买家）</button>
           <button type="button" class="chip" data-persona="Marcus">Marcus（B2B 采购经理）</button>
+          <button type="button" class="chip" data-persona="custom" id="custom-chip">+ 自定义</button>
         </div>
         <p class="chip-hint">至少选择一个用户画像</p>
+        <textarea
+          id="custom_persona"
+          name="custom_persona"
+          placeholder="描述自定义画像：角色、背景、采购目标、关注点…"
+          rows="3"
+          style="display:none; margin-top:10px;"
+        ></textarea>
       </div>
 
       <div class="form-group">
@@ -234,6 +318,8 @@
     const submitBtn = document.getElementById('submit-btn');
     const errorMsg = document.getElementById('error-msg');
 
+    const customTextarea = document.getElementById('custom_persona');
+
     // Chip toggle behavior
     chips.forEach(chip => {
       chip.addEventListener('click', () => {
@@ -244,6 +330,12 @@
         if (isSelected && selectedCount === 1) return;
 
         chip.classList.toggle('selected');
+
+        // Show/hide custom persona textarea
+        if (chip.dataset.persona === 'custom') {
+          customTextarea.style.display = chip.classList.contains('selected') ? '' : 'none';
+          if (!chip.classList.contains('selected')) customTextarea.value = '';
+        }
       });
     });
 
@@ -256,6 +348,12 @@
       const rules = document.getElementById('rules').value;
       const personas = Array.from(document.querySelectorAll('.chip.selected'))
         .map(c => c.dataset.persona);
+
+      const business_question = document.getElementById('business_question').value.trim();
+      const research_question = document.getElementById('research_question').value.trim();
+      const success_metrics = document.getElementById('success_metrics').value.trim();
+      const in_scope = document.getElementById('in_scope').value.trim();
+      const custom_persona = document.getElementById('custom_persona').value.trim();
 
       if (personas.length === 0) {
         errorMsg.textContent = '请至少选择一个用户画像';
@@ -270,7 +368,11 @@
         const res = await fetch('/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ submitter, url, personas, rules })
+          body: JSON.stringify({
+            submitter, url, personas, rules,
+            business_question, research_question, success_metrics,
+            in_scope, custom_persona,
+          })
         });
 
         if (!res.ok) {
