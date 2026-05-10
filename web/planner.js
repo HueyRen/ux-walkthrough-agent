@@ -192,12 +192,18 @@ async function generatePlan(projectRoot, jobId, context) {
 
     console.log(`[planner] Generating plan for job ${jobId}...`);
 
-    const { text } = await generateText({
-      model: getModel('claude-sonnet'),
-      system: systemPrompt,
-      prompt: userPrompt,
-      maxTokens: 8192,
-    });
+    const PLAN_TIMEOUT_MS = 60_000;
+    const { text } = await Promise.race([
+      generateText({
+        model: getModel('claude-sonnet'),
+        system: systemPrompt,
+        prompt: userPrompt,
+        maxTokens: 8192,
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Plan generation timeout (${PLAN_TIMEOUT_MS / 1000}s)`)), PLAN_TIMEOUT_MS)
+      ),
+    ]);
 
     // Validate output
     const stations = parseStations(text);
