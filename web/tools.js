@@ -12,7 +12,17 @@ function createPlaywrightTools(browser, jobId, supabaseAdmin, jobEmitter, person
     context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
       userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      locale: 'en-US',
+      timezoneId: 'America/Los_Angeles',
+    });
+    // Remove headless detection signals
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      // Patch chrome runtime
+      window.chrome = { runtime: {}, loadTimes: () => ({}), csi: () => ({}) };
     });
     page = await context.newPage();
   }

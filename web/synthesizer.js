@@ -381,6 +381,11 @@ async function synthesizeFindings(jobId, job) {
   // 3. Deduplicate / merge
   const mergedRaw = await deduplicateFindings(findings, job);
 
+  // 3b. Make IDs globally unique by prefixing with jobId
+  for (const mf of mergedRaw) {
+    mf.id = `${jobId}-${mf.id}`;
+  }
+
   // 4. Calibrate severity on each merged finding
   const totalPersonas = Array.isArray(job.personas) ? job.personas.length : 1;
   const calibrated = mergedRaw.map(mf => {

@@ -222,12 +222,31 @@ async function runJob(jobId, projectRoot, abortControllers) {
       fullSystemPrompt += `\n\n## 用户补充指令\n${job.plan.user_prompt}`;
     }
 
-    // Launch browser (with timeout)
+    // Launch browser with anti-detection measures
+    const proxyUrl = process.env.PROXY_URL; // e.g. http://user:pass@proxy.example.com:8080
+    const launchOpts = {
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-blink-features=AutomationControlled',
+      ],
+    };
+    if (proxyUrl) {
+      try {
+        const parsed = new URL(proxyUrl);
+        launchOpts.proxy = {
+          server: `${parsed.protocol}//${parsed.host}`,
+          username: decodeURIComponent(parsed.username),
+          password: decodeURIComponent(parsed.password),
+        };
+      } catch (_) {
+        launchOpts.proxy = { server: proxyUrl };
+      }
+    }
     const browser = await Promise.race([
-      chromium.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
-      }),
+      chromium.launch(launchOpts),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error(`Browser launch timeout (${BROWSER_LAUNCH_TIMEOUT_MS / 1000}s)`)), BROWSER_LAUNCH_TIMEOUT_MS)
       ),

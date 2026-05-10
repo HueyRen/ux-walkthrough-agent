@@ -298,7 +298,7 @@ async function main() {
   const globalBuffer = (jid, ev) => {
     if (!screenshotBuffers.has(jid)) screenshotBuffers.set(jid, []);
     const buf = screenshotBuffers.get(jid);
-    if (ev.type === 'screenshot' || ev.type === 'station-change' || ev.type === 'issue') {
+    if (ev.type === 'screenshot' || ev.type === 'station-change' || ev.type === 'issue' || ev.type === 'cot' || ev.type === 'tool-call') {
       buf.push(ev);
     }
     if (ev.type === 'done' || ev.type === 'failed') {
