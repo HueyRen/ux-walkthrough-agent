@@ -8,6 +8,10 @@ instances/*/
 # Web app
 web/node_modules/
 web/jobs.json
+web/.env
+
+# Supabase local
+supabase/.temp/
 
 # OS files
 .DS_Store
