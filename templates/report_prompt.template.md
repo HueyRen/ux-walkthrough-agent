@@ -290,11 +290,11 @@
 {{PERSONA_WEIGHTS}} =
 | 画像 | 权重 | 说明 |
 |------|------|------|
-| small_retail | 40% | 平台最大用户群 |
-| medium_brand | 25% | 核心付费用户 |
-| large_brand | 15% | 高价值用户 |
-| service_provider | 12% | 高频用户 |
-| manufacturer | 8% | 小众但高专业度 |
+| small_retail (小微零售商) | 40% | 平台最大用户群 |
+| medium_brand (中型品牌零售商) | 33.8% | 核心付费用户 |
+| large_brand (大型深耕品牌主) | 5% | 高价值但低频 |
+| service_provider (服务提供商) | 12.1% | 代理采购，高频用户 |
+| manufacturer (制造商) | 9.1% | 小众但高专业度 |
 
 {{ANALYSIS_DIMENSIONS}} =
 - 画像维度：不同买家类型的体验差异

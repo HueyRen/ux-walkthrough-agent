@@ -12,7 +12,7 @@
 | 站点 | 编号 | 品类 | 主要画像 | 辅助画像 |
 |------|------|------|----------|----------|
 | 首页着陆 | S1 | — | Lisa Chen (小白) | Carlos Mendez (老买家) |
-| 搜索标准品 | S2 | 标准品 | Carlos Mendez | Lisa Chen |
+| 搜索标准品 | S2 | 标准品 | Carlos Mendez | Lisa Chen, Anna Kowalski |
 | 标准品详情页 | S3 | 标准品 | Carlos Mendez | Lisa Chen, Kenji Watanabe |
 | 搜索轻定制 | S4 | 轻定制 | Anna Kowalski | Isabelle Durand |
 | 轻定制详情页 | S5 | 轻定制 | Anna Kowalski | Isabelle Durand |
@@ -57,6 +57,23 @@
 8. **寻找"新用户引导"或"Get Started"类入口，记录是否存在**
    - 截图: `r1_s1_homepage_step08_new_user_guide_search.png`
 
+9. **[Discovery Mode] 切换至 Lisa Chen（B类小白）视角，执行无关键词探索**
+   - 声明: "现在切换到 Lisa Chen（B类小白）视角——无关键词 Discovery Mode"
+   - **禁止使用搜索框**。模拟一个"完全不知道该搜什么"的新用户
+   - 仅通过首页可见的链接、Banner、类目导航、推荐区块去寻找她感兴趣的商品（美妆工具）
+   - 记录她的探索路径（点了什么→看到了什么→是否迷失）
+   - 截图: `r1_s1_homepage_step09_discovery_browse_start.png`
+
+10. **[Discovery Mode] 沿着 Lisa 的探索路径继续深入 1-2 层（类目页/推荐落地页）**
+    - 记录：从首页到找到一个相关商品，需要几次点击？是否走进死胡同？
+    - 截图: `r1_s1_homepage_step10_discovery_category_page.png`
+    - 截图: `r1_s1_homepage_step10b_discovery_result.png`
+
+11. **[Discovery Mode] 评估 Discovery 路径体验**
+    - 总结: 新用户不使用搜索时，能否通过浏览发现想要的商品？
+    - 路径长度、迷失点、认知障碍一一记录
+    - 截图: `r1_s1_homepage_step11_discovery_endpoint.png`
+
 ### 多画像评估维度
 
 **Lisa Chen（B类小白）评估点**:
@@ -88,6 +105,10 @@
 | 步骤 | r1_s1_homepage_step07_scroll_mid.png | |
 | 步骤 | r1_s1_homepage_step07b_scroll_bottom.png | |
 | 步骤 | r1_s1_homepage_step08_new_user_guide_search.png | |
+| 步骤 | r1_s1_homepage_step09_discovery_browse_start.png | |
+| 步骤 | r1_s1_homepage_step10_discovery_category_page.png | |
+| 步骤 | r1_s1_homepage_step10b_discovery_result.png | |
+| 步骤 | r1_s1_homepage_step11_discovery_endpoint.png | |
 | 问题 | r1_s1_homepage_issue_XX_[brief].png | （按实际问题数量添加） |
 
 ---
@@ -146,6 +167,11 @@
 - [ ] MOQ 标注是否帮助还是困扰她？
 - [ ] 商品卡片上哪些信息她能看懂，哪些看不懂？
 - [ ] 她能找到 "Buy Now" 类型的标准品吗？
+
+**Anna Kowalski（B类资深，首次用平台）评估点**:
+- [ ] 她对搜索结果的整体质量满意吗？（有采购经验但没用过 Alibaba）
+- [ ] 标准品搜索结果中的信息密度对资深采购来说是否足够？
+- [ ] 她能快速判断哪些供应商值得进一步联系吗？
 
 ### 新用户认知检查
 - [ ] 搜索结果页是否出现平台术语需要 flag？
@@ -291,6 +317,19 @@
    - 在新标签页搜索 "mug"，截图首屏
    - 截图: `r1_s4_search_custom_step08_mug_comparison.png`
 
+9. **搜索第二个轻定制品类: "custom printed t-shirt"（T恤）**
+   - 清空搜索框，输入 "custom printed t-shirt"，搜索
+   - 截图: `r1_s4_search_custom_step09_input_tshirt.png`
+
+10. **截图 T恤搜索结果首屏，对比马克杯结果的差异**
+    - 关注: T恤作为视觉型品类，图片质量、颜色展示、尺码表信息是否完善
+    - 定制选项（印花方式: 丝印/数码印/热转印）是否在卡片上有标注
+    - 截图: `r1_s4_search_custom_step10_tshirt_results.png`
+
+11. **评估 T恤 vs 马克杯的定制体验差异**
+    - 记录: 视觉型品类（T恤）和功能型品类（马克杯）在搜索结果中的体验差异
+    - 截图: `r1_s4_search_custom_step11_tshirt_custom_labels.png`
+
 ### 多画像评估维度
 
 **Anna Kowalski（B类资深）评估点**:
@@ -317,6 +356,9 @@
 | 步骤 | r1_s4_search_custom_step05_customization_hub.png | |
 | 步骤 | r1_s4_search_custom_step07_filter_customization.png | |
 | 步骤 | r1_s4_search_custom_step08_mug_comparison.png | |
+| 步骤 | r1_s4_search_custom_step09_input_tshirt.png | |
+| 步骤 | r1_s4_search_custom_step10_tshirt_results.png | |
+| 步骤 | r1_s4_search_custom_step11_tshirt_custom_labels.png | |
 | 问题 | r1_s4_search_custom_issue_XX_[brief].png | |
 
 ---
@@ -419,6 +461,18 @@
 8. **查看搜索结果中 AI 功能的应用（AI匹配推荐、智能问答等）**
    - 截图: `r1_s6_search_oem_step08_ai_features.png`
 
+9. **搜索第二个重定制品类: "OEM backpack manufacturer"（背包）**
+   - 清空搜索框，输入 "OEM backpack manufacturer"，搜索
+   - 截图: `r1_s6_search_oem_step09_input_backpack.png`
+
+10. **截图背包 OEM 搜索结果首屏**
+    - 关注: 背包作为劳密型品类，供应商是否以工厂为主？是否有 OEM 能力标识？
+    - 截图: `r1_s6_search_oem_step10_backpack_results.png`
+
+11. **对比蓝牙音箱 vs 背包的 OEM 搜索体验差异**
+    - 3C 电子（技术密集）vs 箱包（劳密集）在工厂筛选、认证体系上的差异
+    - 截图: `r1_s6_search_oem_step11_backpack_factory_filter.png`
+
 ### 多画像评估维度
 
 **Marcus Thompson（老买家）评估点**:
@@ -445,6 +499,9 @@
 | 步骤 | r1_s6_search_oem_step05_verified_supplier_filter.png | |
 | 步骤 | r1_s6_search_oem_step06_rfq_entry.png | |
 | 步骤 | r1_s6_search_oem_step08_ai_features.png | |
+| 步骤 | r1_s6_search_oem_step09_input_backpack.png | |
+| 步骤 | r1_s6_search_oem_step10_backpack_results.png | |
+| 步骤 | r1_s6_search_oem_step11_backpack_factory_filter.png | |
 | 问题 | r1_s6_search_oem_issue_XX_[brief].png | |
 
 ---

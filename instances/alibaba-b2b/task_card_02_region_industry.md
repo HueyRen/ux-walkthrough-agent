@@ -442,3 +442,45 @@
 - Round 2 步骤截图总计: X 张
 - Round 2 问题截图总计: X 张
 ```
+
+---
+
+## 纠正脚本 (Correction Scripts)
+
+当 Agent 在执行过程中违反约束条件时，操作人员可以直接粘贴以下纠正脚本来修正行为。
+
+### 纠正脚本 1: Agent 忘记 375px 移动端视口约束
+
+> **⚠️ 视口约束违规。** 你当前正在桌面端视口下执行印尼场景走查。印尼场景必须在 **375px 宽度视口** 下执行。请立即：
+> 1. 将浏览器视口调整为 375px 宽度
+> 2. 截图确认视口已切换: `r2_s3_id_viewport_correction.png`
+> 3. 从当前步骤重新开始，在移动端视口下重新截图
+> 4. 之前桌面端视口下的截图作废，不计入报告
+
+### 纠正脚本 2: Agent 在德语场景中没有切换语言
+
+> **⚠️ 语言约束违规。** 德国场景需要测试德语体验。请立即：
+> 1. 将 Alibaba.com 的语言设置切换为德语（如果有）
+> 2. 使用德语搜索词 "Kaffeetasse mit Logo" 进行搜索
+> 3. 截图记录语言切换前后的页面差异
+> 4. 发送指定的德语消息测试 AI 翻译功能
+
+### 纠正脚本 3: Agent 在德语翻译测试中跳过了指定消息
+
+> **⚠️ 翻译测试缺失。** 你需要使用以下**完整的德语消息**测试 AI 翻译功能，不可用自拟消息代替：
+> 
+> "Guten Tag, ich möchte 500 Tassen mit unserem Firmenlogo bestellen. Können Sie mir bitte ein Angebot mit Lieferzeit nach Deutschland schicken? Wir benötigen auch eine CE-Konformitätserklärung."
+> 
+> 请在即时聊天中发送此消息，然后截图 AI 翻译结果。
+
+### 纠正脚本 4: Agent 漏掉了行业对比表
+
+> **⚠️ 对比表缺失。** 参数型 vs 视觉型行业对比分析表是 Round 2 的**必交付项**。请在完成两个行业走查后，立即填写完整的对比表。不可以文字描述代替表格。
+
+### 纠正脚本 5: Agent 使用关键词搜索执行 Discovery Mode
+
+> **⚠️ Discovery Mode 违规。** 在新用户 Discovery Mode 下，**禁止使用搜索框输入关键词**。请：
+> 1. 清空搜索框
+> 2. 仅通过点击页面上已有的链接、导航、Banner、推荐区块来探索
+> 3. 记录你的点击路径和每一步看到的内容
+> 4. 评估：不搜索的用户能否找到他想要的商品？
