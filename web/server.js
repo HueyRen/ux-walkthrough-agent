@@ -52,6 +52,9 @@ async function main() {
     res.sendFile(path.join(__dirname, 'public', 'study.html'));
   });
 
+  // GET /health — Railway health check
+  app.get('/health', (req, res) => res.json({ ok: true }));
+
   // GET /api/config — frontend Supabase config
   app.get('/api/config', (req, res) => {
     res.json({ supabaseUrl, supabaseAnonKey });
@@ -182,11 +185,21 @@ async function main() {
     }
   });
 
-  // GET /reports/:id → serve raw_report.html
-  app.get('/reports/:id', (req, res) => {
+  // GET /reports/:id → serve raw_report.html (disk first, Supabase fallback)
+  app.get('/reports/:id', async (req, res) => {
     const reportPath = path.join(projectRoot, 'outputs', req.params.id, 'raw_report.html');
-    res.sendFile(reportPath, (err) => {
-      if (err) res.status(404).json({ error: '报告不存在' });
+    res.sendFile(reportPath, async (err) => {
+      if (!err) return;
+      try {
+        const job = await getJob(req.params.id);
+        if (job?.report_html) {
+          res.type('html').send(job.report_html);
+        } else {
+          res.status(404).json({ error: '报告不存在' });
+        }
+      } catch (_) {
+        res.status(404).json({ error: '报告不存在' });
+      }
     });
   });
 
@@ -321,6 +334,15 @@ async function main() {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`UX Walkthrough server running at http://0.0.0.0:${PORT}`);
   });
+
+  // Graceful shutdown for Railway deploys
+  const shutdown = (signal) => {
+    console.log(`${signal} received, shutting down...`);
+    server.close();
+    setTimeout(() => process.exit(1), 30_000);
+  };
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 main().catch((err) => {

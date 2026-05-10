@@ -729,6 +729,9 @@ async function generateReport(jobId, projectRoot) {
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(path.join(outputDir, 'raw_report.html'), html, 'utf8');
 
+  // Persist report HTML to Supabase (survives ephemeral container restarts)
+  await updateJob(jobId, { report_html: html });
+
   // Write manifest
   const manifest = {
     job_id: jobId,
