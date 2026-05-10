@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UX 体验走查</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid #d0d0d0;
+      border-radius: 10px;
+      padding: 32px;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="url"],
+    select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1.5px solid #d0d0d0;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      color: #333;
+      background: #fff;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+
+    input[type="text"]:focus,
+    input[type="url"]:focus,
+    select:focus {
+      border-color: #4a90d9;
+    }
+
+    input::placeholder {
+      color: #aaa;
+    }
+
+    small {
+      display: block;
+      font-size: 12px;
+      color: #999;
+      margin-top: 5px;
+    }
+
+    .persona-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .chip {
+      padding: 6px 14px;
+      border: 1.5px solid #d0d0d0;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      background: #fff;
+      transition: all 0.15s;
+      color: #555;
+      font-family: inherit;
+    }
+
+    .chip:hover {
+      border-color: #aac4ef;
+    }
+
+    .chip.selected {
+      background: #e8f0fe;
+      border-color: #4a90d9;
+      color: #1a73e8;
+    }
+
+    .chip-hint {
+      font-size: 12px;
+      color: #999;
+      margin-top: 6px;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 11px;
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 8px;
+    }
+
+    .submit-btn:hover {
+      background: #1558c0;
+    }
+
+    .submit-btn:disabled {
+      background: #a0c0f0;
+      cursor: not-allowed;
+    }
+
+    .error-msg {
+      font-size: 13px;
+      color: #dc3545;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .footer-links {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .footer-links a {
+      font-size: 13px;
+      color: #1a73e8;
+      text-decoration: none;
+    }
+
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 560px) {
+      .card { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>UX 体验走查</h1>
+    <p class="subtitle">提交一个走查任务，AI 自动执行并生成 HTML 报告</p>
+
+    <form id="walkthrough-form">
+      <div class="form-group">
+        <label for="submitter">你的名字 / 邮箱</label>
+        <input
+          type="text"
+          id="submitter"
+          name="submitter"
+          placeholder="用于通知和任务追踪"
+          required
+        >
+      </div>
+
+      <div class="form-group">
+        <label for="url">目标网站 URL</label>
+        <input
+          type="url"
+          id="url"
+          name="url"
+          value="https://www.alibaba.com"
+          required
+        >
+        <small>v1 仅支持 alibaba.com 域名</small>
+      </div>
+
+      <div class="form-group">
+        <label>选择用户画像 <span style="font-weight:400;color:#999">（可多选）</span></label>
+        <div class="persona-chips">
+          <button type="button" class="chip selected" data-persona="Lisa">Lisa（新买家）</button>
+          <button type="button" class="chip selected" data-persona="Carlos">Carlos（经验买家）</button>
+          <button type="button" class="chip" data-persona="Marcus">Marcus（B2B 采购经理）</button>
+        </div>
+        <p class="chip-hint">至少选择一个用户画像</p>
+      </div>
+
+      <div class="form-group">
+        <label for="rules">评估规则集</label>
+        <select id="rules" name="rules">
+          <option value="b2b_ecommerce">B2B 电商通用规则</option>
+        </select>
+      </div>
+
+      <button type="submit" class="submit-btn" id="submit-btn">开始走查 →</button>
+      <p class="error-msg" id="error-msg"></p>
+    </form>
+
+    <div class="footer-links">
+      <a href="/jobs">查看走查历史 →</a>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    const chips = document.querySelectorAll('.chip');
+    const form = document.getElementById('walkthrough-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const errorMsg = document.getElementById('error-msg');
+
+    // Chip toggle behavior
+    chips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        const isSelected = chip.classList.contains('selected');
+        const selectedCount = document.querySelectorAll('.chip.selected').length;
+
+        // Prevent deselecting the last chip
+        if (isSelected && selectedCount === 1) return;
+
+        chip.classList.toggle('selected');
+      });
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.style.display = 'none';
+
+      const submitter = document.getElementById('submitter').value.trim();
+      const url = document.getElementById('url').value.trim();
+      const rules = document.getElementById('rules').value;
+      const personas = Array.from(document.querySelectorAll('.chip.selected'))
+        .map(c => c.dataset.persona);
+
+      if (personas.length === 0) {
+        errorMsg.textContent = '请至少选择一个用户画像';
+        errorMsg.style.display = 'block';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '提交中...';
+
+      try {
+        const res = await fetch('/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ submitter, url, personas, rules })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `服务器错误 (${res.status})`);
+        }
+
+        const { jobId } = await res.json();
+        window.location.href = `/jobs/${jobId}`;
+      } catch (err) {
+        errorMsg.textContent = err.message || '提交失败，请重试';
+        errorMsg.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = '开始走查 →';
+      }
+    });
+  </script>
+</body>
+</html>

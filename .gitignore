@@ -1,10 +1,22 @@
 # Walkthrough outputs (generated, not committed)
 outputs/
 
+# Generated instance configs per job
+instances/*/
+!instances/alibaba-b2b/
+
+# Web app
+web/node_modules/
+web/jobs.json
+
 # OS files
 .DS_Store
 Thumbs.db
 
+# Playwright MCP runtime artifacts
+.playwright-mcp/
+
 # Editor
 .vscode/
 .idea/
+.gstack/

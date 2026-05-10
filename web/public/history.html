@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>走查历史</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      min-height: 100vh;
+      padding: 32px 16px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .page-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .nav-links a {
+      font-size: 13px;
+      color: #1a73e8;
+      text-decoration: none;
+    }
+
+    .nav-links a:hover { text-decoration: underline; }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid #d0d0d0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background: #f8f9fa;
+      border-bottom: 1px solid #d0d0d0;
+    }
+
+    th {
+      padding: 11px 14px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 12px 14px;
+      font-size: 14px;
+      color: #333;
+      border-bottom: 1px solid #f0f0f0;
+      vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    tr:hover td { background: #fafafa; }
+
+    .col-date  { width: 110px; color: #888; font-size: 13px; }
+    .col-site  { font-weight: 500; }
+    .col-sub   { color: #555; }
+    .col-cnt   { text-align: center; }
+    .col-report { text-align: right; }
+
+    .status-badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    .status-badge.queued  { background: #e2e3e5; color: #383d41; }
+    .status-badge.running { background: #fff3cd; color: #856404; }
+    .status-badge.done    { background: #d4edda; color: #155724; }
+    .status-badge.failed  { background: #f8d7da; color: #721c24; }
+    .status-badge.timeout { background: #fff3cd; color: #856404; }
+
+    .report-link {
+      color: #1a73e8;
+      text-decoration: none;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .report-link:hover { text-decoration: underline; }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #888;
+      font-size: 14px;
+    }
+
+    .empty-state a {
+      color: #1a73e8;
+      text-decoration: none;
+    }
+
+    .empty-state a:hover { text-decoration: underline; }
+
+    .loading-row td {
+      color: #aaa;
+      font-size: 13px;
+      text-align: center;
+      padding: 40px;
+    }
+
+    /* Responsive: stack table on very small screens */
+    @media (max-width: 540px) {
+      th, td { padding: 10px 10px; }
+      .col-sub { display: none; }
+      th:nth-child(3), td:nth-child(3) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="page-header">
+      <h1 class="page-title">走查历史</h1>
+      <div class="nav-links">
+        <a href="/">← 新建走查</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>网站</th>
+            <th>提交者</th>
+            <th>状态</th>
+            <th class="col-cnt">问题数</th>
+            <th class="col-report">报告</th>
+          </tr>
+        </thead>
+        <tbody id="job-list">
+          <tr class="loading-row">
+            <td colspan="6">加载中...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    const tbody = document.getElementById('job-list');
+
+    function renderRows(jobs) {
+      if (!jobs || jobs.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6">
+              <div class="empty-state">
+                暂无走查记录。<br>
+                <a href="/">立即新建走查 →</a>
+              </div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = jobs.map(job => {
+        const dateStr = formatDate(job.createdAt);
+        const domain = extractDomain(job.url);
+        const badge = statusBadge(job.status);
+        const issueCount = job.issueCount != null ? job.issueCount : '—';
+
+        let reportCell;
+        if (job.status === 'done') {
+          reportCell = `<a class="report-link" href="/reports/${job.id}">查看报告</a>`;
+        } else {
+          reportCell = `<a class="report-link" href="/jobs/${job.id}">查看状态</a>`;
+        }
+
+        return `
+          <tr>
+            <td class="col-date">${dateStr}</td>
+            <td class="col-site">${escapeHtml(domain)}</td>
+            <td class="col-sub">${escapeHtml(job.submitter || '—')}</td>
+            <td>${badge}</td>
+            <td class="col-cnt">${issueCount}</td>
+            <td class="col-report">${reportCell}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function loadJobs() {
+      try {
+        const res = await fetch('/api/jobs');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const jobs = await res.json();
+        renderRows(Array.isArray(jobs) ? jobs : (jobs.jobs || []));
+      } catch (err) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6">
+              <div class="empty-state">加载失败，请刷新页面重试。</div>
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    loadJobs();
+  </script>
+</body>
+</html>

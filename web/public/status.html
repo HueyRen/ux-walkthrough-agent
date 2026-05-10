@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>走查进度</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      min-height: 100vh;
+      padding: 32px 16px;
+    }
+
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    .nav-links {
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+
+    .nav-links a {
+      color: #1a73e8;
+      text-decoration: none;
+      margin-right: 16px;
+    }
+
+    .nav-links a:hover { text-decoration: underline; }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid #d0d0d0;
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    /* Job header */
+    .job-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .job-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .job-meta {
+      font-size: 12px;
+      color: #999;
+      font-family: monospace;
+    }
+
+    .job-meta span { margin-right: 10px; }
+
+    /* Status badges */
+    .status-badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    .status-badge.queued  { background: #e2e3e5; color: #383d41; }
+    .status-badge.running { background: #fff3cd; color: #856404; }
+    .status-badge.done    { background: #d4edda; color: #155724; }
+    .status-badge.failed  { background: #f8d7da; color: #721c24; }
+    .status-badge.timeout { background: #fff3cd; color: #856404; }
+
+    /* Progress bar */
+    .progress-wrap {
+      margin-bottom: 8px;
+    }
+
+    .progress-bar-track {
+      background: #e9ecef;
+      border-radius: 3px;
+      height: 6px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: #1a73e8;
+      border-radius: 3px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+
+    .progress-label {
+      font-size: 12px;
+      color: #888;
+    }
+
+    /* Station list */
+    .station-list {
+      list-style: none;
+      margin-top: 20px;
+    }
+
+    .station-item {
+      display: flex;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+
+    .station-item:last-child { border-bottom: none; }
+
+    .station-icon {
+      width: 22px;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .station-icon.done    { color: #28a745; }
+    .station-icon.current { color: #1a73e8; }
+    .station-icon.pending { color: #ccc; }
+
+    .station-name {
+      flex: 1;
+      color: #333;
+    }
+
+    .station-name.pending { color: #aaa; }
+    .station-name.current { font-weight: 600; }
+
+    .station-right {
+      font-size: 12px;
+      color: #888;
+      margin-left: 8px;
+    }
+
+    .station-right.current-label { color: #1a73e8; }
+
+    /* Screenshots */
+    .screenshots-section {
+      margin-top: 20px;
+    }
+
+    .screenshots-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 10px;
+    }
+
+    .screenshot-thumbs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .screenshot-thumb {
+      width: 80px;
+      height: 54px;
+      background: #f0f0f0;
+      border: 1px solid #d0d0d0;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: #888;
+      text-align: center;
+      overflow: hidden;
+      cursor: default;
+      position: relative;
+    }
+
+    .screenshot-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .screenshot-thumb .thumb-label {
+      padding: 3px;
+      line-height: 1.3;
+    }
+
+    /* Download button */
+    .download-btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 10px 24px;
+      background: #28a745;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+
+    .download-btn:hover { background: #1e8035; }
+
+    /* Error state */
+    .error-card {
+      background: #fff8f8;
+      border: 1px solid #f5c6cb;
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-top: 16px;
+      display: none;
+    }
+
+    .error-card .error-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #721c24;
+      margin-bottom: 6px;
+    }
+
+    .error-card .error-detail {
+      font-size: 13px;
+      color: #856060;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+
+    .retry-btn {
+      padding: 8px 18px;
+      background: #dc3545;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .retry-btn:hover { background: #b02a37; }
+    .retry-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+    @media (max-width: 600px) {
+      .card { padding: 20px 16px; }
+      .job-header { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav-links">
+      <a href="/">← 新建走查</a>
+      <a href="/jobs">走查历史</a>
+    </div>
+
+    <!-- Main status card -->
+    <div class="card">
+      <div class="job-header">
+        <div>
+          <div class="job-title" id="job-site">—</div>
+          <div class="job-meta">
+            <span id="job-id-display">—</span>
+            <span id="job-submitter">—</span>
+            <span id="job-time">—</span>
+          </div>
+        </div>
+        <span class="status-badge queued" id="status-badge">排队中</span>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-bar"></div>
+        </div>
+        <div class="progress-label" id="progress-label">等待开始...</div>
+      </div>
+
+      <ul class="station-list" id="station-list"></ul>
+
+      <div class="screenshots-section" id="screenshots-section" style="display:none">
+        <div class="screenshots-label">截图预览</div>
+        <div class="screenshot-thumbs" id="screenshot-thumbs"></div>
+      </div>
+
+      <div id="download-wrap" style="display:none">
+        <a id="download-btn" class="download-btn" href="#">下载 HTML 报告</a>
+      </div>
+    </div>
+
+    <!-- Error card -->
+    <div class="error-card" id="error-card">
+      <div class="error-title" id="error-title">走查失败</div>
+      <div class="error-detail" id="error-detail">发生了未知错误</div>
+      <button class="retry-btn" id="retry-btn">重新走查</button>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    const STATIONS = [
+      { id: 'S1', name: '首页着陆' },
+      { id: 'S2', name: '搜索标准品' },
+      { id: 'S3', name: '标准品详情页' },
+      { id: 'S4', name: '搜索轻定制' },
+      { id: 'S5', name: '轻定制详情页' },
+      { id: 'S6', name: '搜索重定制' },
+      { id: 'S7', name: '重定制详情页' },
+      { id: 'S8', name: '沟通询盘流程' },
+      { id: 'S9', name: 'Manufacturers Tab' },
+    ];
+
+    // Parse job ID from URL path /jobs/:id
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    const jobId = pathParts[pathParts.length - 1];
+
+    // State
+    let jobData = null;
+    let stationState = {}; // stationId -> { status: 'done'|'current'|'pending', issues: 0 }
+    let totalIssues = 0;
+    let completedStations = 0;
+    let ws = null;
+
+    // Initialize station state
+    STATIONS.forEach(s => {
+      stationState[s.id] = { status: 'pending', issues: 0 };
+    });
+
+    // DOM refs
+    const elSite = document.getElementById('job-site');
+    const elJobId = document.getElementById('job-id-display');
+    const elSubmitter = document.getElementById('job-submitter');
+    const elTime = document.getElementById('job-time');
+    const elBadge = document.getElementById('status-badge');
+    const elProgressBar = document.getElementById('progress-bar');
+    const elProgressLabel = document.getElementById('progress-label');
+    const elStationList = document.getElementById('station-list');
+    const elScreenshotsSection = document.getElementById('screenshots-section');
+    const elScreenshotThumbs = document.getElementById('screenshot-thumbs');
+    const elDownloadWrap = document.getElementById('download-wrap');
+    const elDownloadBtn = document.getElementById('download-btn');
+    const elErrorCard = document.getElementById('error-card');
+    const elErrorTitle = document.getElementById('error-title');
+    const elErrorDetail = document.getElementById('error-detail');
+    const elRetryBtn = document.getElementById('retry-btn');
+
+    function renderStationList() {
+      elStationList.innerHTML = '';
+      STATIONS.forEach(s => {
+        const state = stationState[s.id];
+        const li = document.createElement('li');
+        li.className = 'station-item';
+
+        let iconChar, iconClass, nameClass, rightHtml;
+
+        if (state.status === 'done') {
+          iconChar = '✓';
+          iconClass = 'done';
+          nameClass = 'done';
+          rightHtml = state.issues > 0
+            ? `<span class="station-right">${state.issues} 个问题</span>`
+            : `<span class="station-right">—</span>`;
+        } else if (state.status === 'current') {
+          iconChar = '●';
+          iconClass = 'current';
+          nameClass = 'current';
+          rightHtml = `<span class="station-right current-label">进行中...</span>`;
+        } else {
+          iconChar = '○';
+          iconClass = 'pending';
+          nameClass = 'pending';
+          rightHtml = '';
+        }
+
+        li.innerHTML = `
+          <span class="station-icon ${iconClass}">${iconChar}</span>
+          <span class="station-name ${nameClass}">${s.name}</span>
+          ${rightHtml}
+        `;
+        elStationList.appendChild(li);
+      });
+    }
+
+    function updateProgressBar(completed, total, issues, etaMinutes) {
+      const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+      elProgressBar.style.width = `${pct}%`;
+
+      let label = `站点 ${completed}/${total}`;
+      if (etaMinutes != null && etaMinutes > 0) {
+        label += ` · 预计还需 ${etaMinutes} 分钟`;
+      }
+      label += ` · 已发现 ${issues} 个问题`;
+      elProgressLabel.textContent = label;
+    }
+
+    function setStatusBadge(status) {
+      elBadge.className = `status-badge ${status}`;
+      const labels = {
+        queued: '排队中',
+        running: '执行中',
+        done: '完成',
+        failed: '失败',
+        timeout: '超时'
+      };
+      elBadge.textContent = labels[status] || status;
+    }
+
+    function showDownloadButton(reportUrl) {
+      elDownloadBtn.href = reportUrl || `/reports/${jobId}`;
+      elDownloadWrap.style.display = 'block';
+      setStatusBadge('done');
+      elProgressBar.style.width = '100%';
+    }
+
+    function showError(errorMsg, isTimeout) {
+      elErrorCard.style.display = 'block';
+      elErrorTitle.textContent = isTimeout ? '走查超时' : '走查失败';
+      elErrorDetail.textContent = errorMsg || '发生了未知错误，请重试。';
+      setStatusBadge(isTimeout ? 'timeout' : 'failed');
+    }
+
+    function addScreenshotThumb(payload) {
+      elScreenshotsSection.style.display = 'block';
+      const thumb = document.createElement('div');
+      thumb.className = 'screenshot-thumb';
+
+      if (payload.imageUrl) {
+        thumb.innerHTML = `<img src="${payload.imageUrl}" alt="${payload.stationName || ''}">`;
+      } else {
+        thumb.innerHTML = `<span class="thumb-label">${payload.stationName || payload.stationId || '截图'}</span>`;
+      }
+      elScreenshotThumbs.appendChild(thumb);
+    }
+
+    function applyInitialState(job) {
+      jobData = job;
+      elSite.textContent = extractDomain(job.url) || '—';
+      elJobId.textContent = job.id || jobId;
+      elSubmitter.textContent = job.submitter || '—';
+      elTime.textContent = timeAgo(job.created_at);
+      setStatusBadge(job.status || 'queued');
+
+      totalIssues = job.issue_count || 0;
+
+      renderStationList();
+      updateProgressBar(completedStations, STATIONS.length, totalIssues, null);
+
+      if (job.status === 'done') {
+        showDownloadButton(`/reports/${jobId}`);
+      } else if (job.status === 'failed') {
+        showError(job.error_msg, false);
+      } else if (job.status === 'timeout') {
+        showError(job.error_msg, true);
+      }
+    }
+
+    function connectWebSocket() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}/ws?jobId=${jobId}`);
+
+      ws.onmessage = (e) => {
+        let msg;
+        try { msg = JSON.parse(e.data); } catch { return; }
+        const { type, payload } = msg;
+
+        switch (type) {
+          case 'state': {
+            // Initial state from DB on WS connect
+            applyInitialState(payload);
+            break;
+          }
+          case 'station': {
+            // payload: { stationId, status }
+            const sid = payload.stationId;
+            if (stationState[sid]) {
+              stationState[sid].status = payload.status;
+            }
+            completedStations = Object.values(stationState).filter(s => s.status === 'done').length;
+            renderStationList();
+            updateProgressBar(completedStations, STATIONS.length, totalIssues, null);
+            setStatusBadge('running');
+            break;
+          }
+          case 'screenshot': {
+            addScreenshotThumb(payload);
+            break;
+          }
+          case 'issue': {
+            totalIssues++;
+            const sid = payload && payload.stationId;
+            if (sid && stationState[sid]) {
+              stationState[sid].issues = (stationState[sid].issues || 0) + 1;
+              renderStationList();
+            }
+            updateProgressBar(completedStations, STATIONS.length, totalIssues, null);
+            break;
+          }
+          case 'progress': {
+            // payload: { completed, total, issues }
+            if (payload.completed != null) completedStations = payload.completed;
+            if (payload.issues != null) totalIssues = payload.issues;
+            updateProgressBar(
+              payload.completed ?? completedStations,
+              payload.total ?? STATIONS.length,
+              payload.issues ?? totalIssues,
+              null
+            );
+            setStatusBadge('running');
+            break;
+          }
+          case 'done': {
+            showDownloadButton(payload && payload.reportUrl);
+            if (ws) ws.close();
+            break;
+          }
+          case 'failed': {
+            showError(payload && payload.error, false);
+            if (ws) ws.close();
+            break;
+          }
+          case 'timeout': {
+            showError(payload && payload.error, true);
+            if (ws) ws.close();
+            break;
+          }
+        }
+      };
+
+      ws.onerror = () => {
+        // Silently ignore WS errors; job status is already shown from HTTP fetch
+      };
+    }
+
+    // Retry button
+    elRetryBtn.addEventListener('click', async () => {
+      if (!jobData) return;
+      elRetryBtn.disabled = true;
+      elRetryBtn.textContent = '提交中...';
+      try {
+        const res = await fetch('/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            submitter: jobData.submitter,
+            url: jobData.url,
+            personas: jobData.personas,
+            rules: jobData.rules
+          })
+        });
+        if (!res.ok) throw new Error('提交失败');
+        const { jobId: newJobId } = await res.json();
+        window.location.href = `/jobs/${newJobId}`;
+      } catch (err) {
+        elRetryBtn.disabled = false;
+        elRetryBtn.textContent = '重新走查';
+        alert(err.message || '提交失败，请重试');
+      }
+    });
+
+    // Boot sequence
+    async function init() {
+      if (!jobId) {
+        elSite.textContent = '无效的任务 ID';
+        return;
+      }
+
+      // Render skeleton station list first
+      renderStationList();
+
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const job = await res.json();
+        applyInitialState(job);
+
+        // Connect WS only if job is still active
+        if (job.status === 'queued' || job.status === 'running') {
+          connectWebSocket();
+        }
+      } catch (err) {
+        elProgressLabel.textContent = '加载失败，请刷新页面重试';
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
