@@ -58,11 +58,6 @@ async function runJob(jobId, projectRoot, abortControllers) {
     const personasDoc = fs.readFileSync(path.join(instanceDir, 'personas.md'), 'utf8');
     const taskCardDoc = fs.readFileSync(path.join(instanceDir, 'task_card.md'), 'utf8');
     const configDoc = fs.readFileSync(path.join(instanceDir, 'config.md'), 'utf8');
-    const issueSchema = fs.readFileSync(
-      path.join(projectRoot, 'schema', 'issue_schema.md'),
-      'utf8'
-    );
-
     const stations = parseTaskCard(taskCardDoc);
     const job = await getJob(jobId);
     const model = getModel(job.model || 'claude-sonnet');
@@ -71,8 +66,10 @@ async function runJob(jobId, projectRoot, abortControllers) {
     const userGoalMatch = configDoc.match(/## 用户任务目标（最高优先级）\n(.+)/);
     const userGoal = userGoalMatch ? userGoalMatch[1].trim() : '';
 
-    // Inject user supplemental prompt if provided
-    let fullSystemPrompt = systemPrompt + '\n\n' + issueSchema;
+    // System prompt: static across all stations for KV cache reuse
+    // issue_schema.md removed — severity/classification defs already in
+    // system_instructions.md (Chinese) and Zod .describe() annotations
+    let fullSystemPrompt = systemPrompt;
     if (job.plan?.user_prompt) {
       fullSystemPrompt += `\n\n## 用户补充指令\n${job.plan.user_prompt}`;
     }
@@ -117,8 +114,19 @@ async function runJob(jobId, projectRoot, abortControllers) {
 
           const result = streamText({
             model,
-            system: fullSystemPrompt,
-            prompt: stationPrompt,
+            messages: [
+              {
+                role: 'system',
+                content: fullSystemPrompt,
+                providerOptions: {
+                  anthropic: { cacheControl: { type: 'ephemeral' } },
+                },
+              },
+              {
+                role: 'user',
+                content: stationPrompt,
+              },
+            ],
             tools,
             stopWhen: stepCountIs(50),
             maxTokens: 4096,
@@ -137,6 +145,17 @@ async function runJob(jobId, projectRoot, abortControllers) {
               });
             }
           }
+
+          // Token usage + cache metrics
+          const usage = await result.usage;
+          const providerMeta = await result.providerMetadata;
+          const cacheMeta = providerMeta?.anthropic;
+          console.log(`[${jobId}] Station ${station.id} tokens:`, {
+            input: usage?.promptTokens,
+            output: usage?.completionTokens,
+            cacheCreation: cacheMeta?.cacheCreationInputTokens || 0,
+            cacheRead: cacheMeta?.cacheReadInputTokens || 0,
+          });
 
           checker.recordComplete(station.id);
           stationDone = true;
@@ -196,7 +215,14 @@ function parseTaskCard(markdown) {
     stations.push({
       id: `S${num}`,
       name,
+      personas: [],
     });
+  }
+
+  // Extract persona names from the overview table (| ... | S1 | ... | primary | auxiliary |)
+  const personaMap = parsePersonaTable(markdown);
+  for (const station of stations) {
+    station.personas = personaMap[station.id] || [];
   }
 
   // Extract the content for each station (everything between two ## 站点 headers)
@@ -216,14 +242,104 @@ function parseTaskCard(markdown) {
   return stations;
 }
 
+// Extract station→persona mapping from the overview table
+function parsePersonaTable(markdown) {
+  const map = {};
+  // Match table rows: | ... | S1 | ... | Lisa Chen (小白) | Carlos Mendez (老买家) |
+  const tableRows = markdown.match(/^\|[^|]+\|\s*S\d+\s*\|.+$/gm);
+  if (!tableRows) return map;
+
+  for (const row of tableRows) {
+    const cells = row.split('|').map((c) => c.trim()).filter(Boolean);
+    // cells: [name, S#, category, primary persona(s), auxiliary persona(s)]
+    const stationMatch = cells.find((c) => /^S\d+$/.test(c));
+    if (!stationMatch) continue;
+
+    const names = new Set();
+    // Primary + auxiliary columns (last two cells typically)
+    const personaCells = cells.slice(-2);
+    for (const cell of personaCells) {
+      // Extract first names: "Lisa Chen (小白)" → "Lisa", "Carlos Mendez, Anna Kowalski" → ["Carlos", "Anna"]
+      const personaNames = cell.split(',').map((p) => p.trim());
+      for (const pn of personaNames) {
+        const firstName = pn.replace(/\s*\(.*?\)\s*/g, '').split(/\s+/)[0];
+        if (firstName && firstName !== '—' && firstName !== '-') {
+          names.add(firstName);
+        }
+      }
+    }
+    map[stationMatch] = [...names];
+  }
+  return map;
+}
+
+// Filter personas markdown to only include named personas (by first name)
+function filterPersonas(raw, selectedFirstNames) {
+  if (!selectedFirstNames || selectedFirstNames.length === 0) return raw;
+
+  const lines = raw.split('\n');
+  let headerEnd = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('### ')) {
+      headerEnd = i;
+      break;
+    }
+  }
+  const header = lines.slice(0, headerEnd).join('\n');
+
+  const sections = [];
+  let current = null;
+  for (let i = headerEnd; i < lines.length; i++) {
+    if (lines[i].startsWith('### ')) {
+      if (current !== null) sections.push(current);
+      current = [lines[i]];
+    } else if (current !== null) {
+      current.push(lines[i]);
+    }
+  }
+  if (current !== null) sections.push(current);
+
+  const wanted = selectedFirstNames.map((n) => n.toLowerCase());
+  const kept = sections.filter((sec) => {
+    const firstName = sec[0].replace(/^###\s+/, '').split(/\s+/)[0].toLowerCase();
+    return wanted.includes(firstName);
+  });
+
+  const parts = [header];
+  if (kept.length > 0) {
+    parts.push(kept.map((s) => s.join('\n')).join('\n\n'));
+  }
+  return parts.join('\n') + '\n';
+}
+
+// Station-type evaluation guidance (progressive disclosure in user prompt)
+function getStationTypeGuidance(station) {
+  const id = parseInt(station.id.replace('S', ''), 10);
+  if (id <= 1) return '## 评估重点: 首页\n关注价值传递、导航清晰度、新用户首印象';
+  if (id <= 3) return '## 评估重点: 搜索与详情\n关注搜索准确性、筛选逻辑、结果排序、信息层级';
+  if (id <= 5) return '## 评估重点: 轻定制\n关注信息层级、价格可读性、MOQ透明度、供应商信任';
+  if (id <= 7) return '## 评估重点: 重定制\n关注定制流程、MOQ/价格透明度、沟通入口、工厂能力展示';
+  if (id === 8) return '## 评估重点: 询盘\n关注表单合理性、沟通工具、响应预期';
+  return '## 评估重点: 供应商\n关注认证信息、工厂能力、信任建立';
+}
+
 // Build per-station prompt
 function buildStationPrompt(station, personasDoc, job, userGoal) {
   const goalSection = userGoal && userGoal !== '(未填写)'
     ? `\n## 用户任务目标（最高优先级）\n${userGoal}\n\n所有站点的操作和评估都应围绕此目标展开。评估每个界面是否帮助用户高效达成此目标。\n`
     : '';
 
+  // Filter personas to only those assigned to this station
+  const stationPersonas = station.personas.length > 0
+    ? filterPersonas(personasDoc, station.personas)
+    : personasDoc;
+
+  const typeGuidance = getStationTypeGuidance(station);
+
   return `You are now executing Station ${station.id}: ${station.name}
 ${goalSection}
+${typeGuidance}
+
 ## Target URL
 ${job.url}
 
@@ -238,13 +354,13 @@ Follow the operation steps below for this station. For each step:
 ${station.content}
 
 ## Personas for This Walkthrough
-${personasDoc}
+${stationPersonas}
 
 ## Important Rules
 - Take screenshots at every step documented in the station instructions
 - Use the recordIssue tool for EVERY issue you discover — do not just describe issues in text
 - Issue IDs must follow the format P-${station.id}-XX (e.g., P-${station.id}-01)
-- Evaluate from ALL personas listed in the station instructions
+- Evaluate from ALL personas listed above
 - Be thorough: check visual hierarchy, information architecture, interaction patterns, and accessibility
 - Write issue descriptions in first person from the affected persona's perspective`;
 }

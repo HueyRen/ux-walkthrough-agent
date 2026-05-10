@@ -144,11 +144,13 @@ function createPlaywrightTools(browser, jobId, supabaseAdmin, jobEmitter) {
         journey_stage: z.enum(['Find', 'Select', 'Inquire']).describe('Journey phase'),
         sub_stage: z.string().describe('Sub-stage code, e.g. F1, S2, I3'),
         personas_affected: z.array(z.string()).describe('Affected persona names, * marks primary'),
-        severity: z.enum(['P0', 'P1', 'P2', 'P3']).describe('Issue severity'),
+        severity: z.enum(['P0', 'P1', 'P2', 'P3']).describe(
+          'P0=blocker (user cannot complete task), P1=severe (likely to abandon), P2=moderate (can work around), P3=minor'
+        ),
         classification: z
           .enum(['Quick Win', 'Structural', 'Strategic'])
-          .describe('Issue classification'),
-        description: z.string().describe('First-person issue description'),
+          .describe('Quick Win=low cost high benefit, Structural=system-level redesign needed, Strategic=growth opportunity'),
+        description: z.string().describe('First-person issue description from the affected persona perspective, e.g. "I searched for X, but..."'),
         repro_steps: z.array(z.string()).describe('Numbered reproduction steps'),
         impact: z.string().describe('Impact on user decision/behavior'),
         screenshot: z.string().describe('Screenshot filename for this issue'),
