@@ -111,7 +111,7 @@ async function runJob(jobId, projectRoot) {
 
           // Consume the stream and emit events
           for await (const chunk of result.fullStream) {
-            if (chunk.type === 'text-delta') {
+            if (chunk.type === 'text-delta' && chunk.textDelta) {
               jobEmitter.emit(`job:${jobId}`, { type: 'cot', delta: chunk.textDelta });
             } else if (chunk.type === 'tool-call') {
               jobEmitter.emit(`job:${jobId}`, {

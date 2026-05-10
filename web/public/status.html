@@ -560,6 +560,20 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/app.js"></script>
   <script>
+    function extractDomain(url) {
+      try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+    }
+
+    function timeAgo(dateStr) {
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return '刚刚';
+      if (mins < 60) return `${mins} 分钟前`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs} 小时前`;
+      return `${Math.floor(hrs / 24)} 天前`;
+    }
+
     const STATIONS = [
       { id: 'S1', name: '首页着陆' },
       { id: 'S2', name: '搜索标准品' },
@@ -724,6 +738,7 @@
     }
 
     function appendCoT(delta) {
+      if (!delta) return;
       clearCotPlaceholder();
       const span = document.createElement('span');
       span.textContent = delta;
