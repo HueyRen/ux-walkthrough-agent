@@ -9,21 +9,69 @@ function createPlaywrightTools(browser, jobId, supabaseAdmin, jobEmitter, person
   const screenshotUrls = new Map();
 
   async function newContext() {
+    // Randomize viewport slightly to avoid fingerprint consistency
+    const w = 1440 + Math.floor(Math.random() * 80) - 40; // 1400-1480
+    const h = 900 + Math.floor(Math.random() * 60) - 30;  // 870-930
+
     context = await browser.newContext({
-      viewport: { width: 1440, height: 900 },
+      viewport: { width: w, height: h },
       userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-      locale: 'en-US',
-      timezoneId: 'America/Los_Angeles',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      locale: 'zh-CN',
+      timezoneId: 'Asia/Shanghai',
     });
-    // Remove headless detection signals
+
+    // Comprehensive anti-detection script
     await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
-      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-      // Patch chrome runtime
-      window.chrome = { runtime: {}, loadTimes: () => ({}), csi: () => ({}) };
+      // 1. Hide webdriver flag
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+      // 2. Realistic languages matching locale
+      Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'en-US', 'en'] });
+
+      // 3. Realistic plugins — must mimic PluginArray with Plugin objects
+      const makePlugin = (name, desc, filename) => {
+        const p = { name, description: desc, filename, length: 1 };
+        p[0] = { type: 'application/pdf', suffixes: 'pdf', description: desc };
+        return p;
+      };
+      const pluginArr = [
+        makePlugin('PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'),
+        makePlugin('Chrome PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'),
+        makePlugin('Chromium PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'),
+        makePlugin('Microsoft Edge PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'),
+        makePlugin('WebKit built-in PDF', 'Portable Document Format', 'internal-pdf-viewer'),
+      ];
+      pluginArr.item = (i) => pluginArr[i];
+      pluginArr.namedItem = (name) => pluginArr.find(p => p.name === name);
+      pluginArr.refresh = () => {};
+      Object.defineProperty(navigator, 'plugins', { get: () => pluginArr });
+
+      // 4. Hardware signals
+      Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+      Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+      Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 });
+      Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
+
+      // 5. Chrome runtime — must exist in real Chrome
+      if (!window.chrome) window.chrome = {};
+      window.chrome.runtime = { id: undefined };
+      window.chrome.loadTimes = () => ({});
+      window.chrome.csi = () => ({});
+
+      // 6. Permissions API — prevent detection via permission query
+      const origQuery = navigator.permissions?.query?.bind(navigator.permissions);
+      if (origQuery) {
+        navigator.permissions.query = (params) => {
+          if (params.name === 'notifications') {
+            return Promise.resolve({ state: Notification.permission });
+          }
+          return origQuery(params);
+        };
+      }
+
     });
+
     page = await context.newPage();
   }
 

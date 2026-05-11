@@ -257,13 +257,16 @@ async function runJob(jobId, projectRoot, abortControllers) {
 
     const personas = job.personas;
 
-    // Launch all personas in parallel
-    const personaPromises = personas.map((personaName) => {
+    // Launch personas with staggered start to avoid burst traffic detection
+    const personaPromises = personas.map((personaName, idx) => {
       const personaDoc = getPersonaDoc(projectRoot, jobId, personaName);
-      return runPersonaStations({
-        personaName, jobId, browser, stations,
-        fullSystemPrompt, personaDoc, job, userGoal, signal, model,
-      });
+      const delay = idx * (2000 + Math.random() * 3000); // 2-5s stagger between personas
+      return new Promise((resolve) => setTimeout(resolve, delay)).then(() =>
+        runPersonaStations({
+          personaName, jobId, browser, stations,
+          fullSystemPrompt, personaDoc, job, userGoal, signal, model,
+        })
+      );
     });
 
     const results = await Promise.allSettled(personaPromises);
