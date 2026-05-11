@@ -213,10 +213,10 @@
       <div class="form-group">
         <label for="url">目标网站 URL</label>
         <input
-          type="url"
+          type="text"
           id="url"
           name="url"
-          placeholder="https://example.com"
+          placeholder="example.com"
           required
         >
         <small>输入任何公开网站的 URL</small>
@@ -270,7 +270,7 @@
         <label>选择用户画像 <span style="font-weight:400;color:#999">（可多选）</span></label>
         <div class="persona-chips">
           <button type="button" class="chip selected" data-persona="new_user">New User（新用户）</button>
-          <button type="button" class="chip selected" data-persona="experienced_user">Experienced（资深用户）</button>
+          <button type="button" class="chip" data-persona="experienced_user">Experienced（资深用户）</button>
           <button type="button" class="chip" data-persona="mobile_user">Mobile（移动端）</button>
           <button type="button" class="chip" data-persona="accessibility_user">Accessibility（无障碍）</button>
           <button type="button" class="chip" data-persona="custom" id="custom-chip">+ 自定义</button>
@@ -410,7 +410,11 @@
         return;
       }
 
-      const url = document.getElementById('url').value.trim();
+      let url = document.getElementById('url').value.trim();
+      if (url && !/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
+        document.getElementById('url').value = url;
+      }
       const rules = document.getElementById('rules').value;
       const personas = Array.from(document.querySelectorAll('.chip.selected'))
         .map(c => c.dataset.persona);
