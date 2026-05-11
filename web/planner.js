@@ -1,6 +1,6 @@
 'use strict';
 
-const { generateText } = require('ai');
+const { streamText } = require('ai');
 const { getModel } = require('./models');
 const { getJob, updateJob } = require('./db');
 const { parseStations } = require('./config-writer');
@@ -193,17 +193,41 @@ async function generatePlan(projectRoot, jobId, context) {
     console.log(`[planner] Generating plan for job ${jobId}...`);
 
     const PLAN_TIMEOUT_MS = 120_000;
-    const { text } = await Promise.race([
-      generateText({
-        model: getModel('claude-sonnet'),
-        system: systemPrompt,
-        prompt: userPrompt,
-        maxTokens: 8192,
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Plan generation timeout (${PLAN_TIMEOUT_MS / 1000}s)`)), PLAN_TIMEOUT_MS)
-      ),
-    ]);
+
+    // Use streaming to emit progress as stations are detected
+    const result = streamText({
+      model: getModel('claude-sonnet'),
+      system: systemPrompt,
+      prompt: userPrompt,
+      maxTokens: 8192,
+    });
+
+    let text = '';
+    let lastStationCount = 0;
+    let lastParseTime = 0;
+    const startTime = Date.now();
+
+    for await (const chunk of result.textStream) {
+      if (Date.now() - startTime > PLAN_TIMEOUT_MS) {
+        throw new Error(`Plan generation timeout (${PLAN_TIMEOUT_MS / 1000}s)`);
+      }
+      text += chunk;
+
+      // Throttle station parsing to at most once per 300ms
+      const now = Date.now();
+      if (now - lastParseTime < 300) continue;
+      lastParseTime = now;
+
+      const currentStations = parseStations(text);
+      if (currentStations.length > lastStationCount) {
+        lastStationCount = currentStations.length;
+        jobEmitter.emit(`job:${jobId}`, {
+          type: 'plan-progress',
+          stationsFound: currentStations.length,
+          latestStation: currentStations[currentStations.length - 1]?.name || '',
+        });
+      }
+    }
 
     // Validate output
     const stations = parseStations(text);

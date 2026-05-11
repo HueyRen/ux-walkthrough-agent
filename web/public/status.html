@@ -613,11 +613,18 @@
         </div>
         <span class="status-badge planning" id="plan-status-badge">待确认</span>
       </div>
-      <div id="plan-generating" style="display:none; text-align:center; padding:32px 0;">
-        <div style="width:28px;height:28px;border:3px solid #e5e5e5;border-top-color:#4a90d9;
-             border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto;"></div>
-        <p style="color:#555;margin-top:12px;font-size:14px;">AI 正在分析目标网站，生成走查计划...</p>
-        <p style="color:#999;font-size:12px;margin-top:4px;">通常需要 10-15 秒</p>
+      <div id="plan-generating" style="display:none; padding:28px 0;">
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span id="plan-progress-label" style="font-size:13px;color:#555;">正在连接 AI...</span>
+            <span id="plan-progress-pct" style="font-size:12px;color:#999;font-variant-numeric:tabular-nums;">0%</span>
+          </div>
+          <div style="height:6px;background:#e9ecf0;border-radius:3px;overflow:hidden;">
+            <div id="plan-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#4a90d9,#6aa3e0);
+                 border-radius:3px;transition:width 0.4s ease;"></div>
+          </div>
+        </div>
+        <div id="plan-progress-detail" style="font-size:12px;color:#999;text-align:center;min-height:18px;"></div>
       </div>
       <ul class="plan-station-list" id="plan-station-list"></ul>
       <div class="plan-prompt-label" id="plan-prompt-label">还有什么想补充的？</div>
@@ -1525,26 +1532,106 @@
           document.getElementById('plan-job-time').textContent = timeAgo(job.created_at);
 
           if (job.plan?.generating) {
-            // Plan is being generated — show spinner, hide station list + confirm
+            // Plan is being generated — show progress bar, hide station list + confirm
             document.getElementById('plan-generating').style.display = 'block';
             document.getElementById('plan-station-list').style.display = 'none';
             document.getElementById('confirm-btn').style.display = 'none';
             document.getElementById('plan-prompt-label').style.display = 'none';
             document.getElementById('plan-prompt').style.display = 'none';
 
-            // Poll every 2s until plan is ready
+            // Auto-advancing progress bar + SSE for real progress
+            let planProgress = 0;
+            let planDone = false;
+            const barEl = document.getElementById('plan-progress-bar');
+            const pctEl = document.getElementById('plan-progress-pct');
+            const labelEl = document.getElementById('plan-progress-label');
+            const detailEl = document.getElementById('plan-progress-detail');
+
+            const stages = [
+              { at: 5,  label: '正在连接 AI...' },
+              { at: 15, label: '分析目标网站结构...' },
+              { at: 30, label: '设计用户旅程路径...' },
+              { at: 50, label: '生成走查站点...' },
+              { at: 70, label: '细化评估维度...' },
+              { at: 85, label: '校验计划完整性...' },
+            ];
+
+            function setPlanProgress(pct, detail) {
+              planProgress = pct >= 100 ? 100 : Math.min(pct, 99);
+              barEl.style.width = planProgress + '%';
+              pctEl.textContent = Math.round(planProgress) + '%';
+              // Update stage label
+              for (let i = stages.length - 1; i >= 0; i--) {
+                if (planProgress >= stages[i].at) { labelEl.textContent = stages[i].label; break; }
+              }
+              if (detail) detailEl.textContent = detail;
+            }
+
+            // Auto-advance: fast start, logarithmic slowdown
+            const autoTimer = setInterval(() => {
+              if (planDone) return;
+              const remaining = 92 - planProgress;
+              const step = Math.max(0.3, remaining * 0.04);
+              setPlanProgress(planProgress + step);
+            }, 500);
+
+            // Connect SSE for real progress events during planning
+            let planSSE;
+            try {
+              planSSE = new EventSource(`/api/jobs/${jobId}/stream`);
+              planSSE.onmessage = (e) => {
+                try {
+                  const ev = JSON.parse(e.data);
+                  if (ev.type === 'plan-progress') {
+                    // Real progress: map station count to percentage (assume ~7 stations)
+                    const realPct = Math.min(15 + (ev.stationsFound / 7) * 75, 92);
+                    if (realPct > planProgress) {
+                      setPlanProgress(realPct, `已发现 ${ev.stationsFound} 个站点` + (ev.latestStation ? ` · ${ev.latestStation}` : ''));
+                    }
+                  } else if (ev.type === 'plan-ready') {
+                    planDone = true;
+                    clearInterval(autoTimer);
+                    setPlanProgress(100);
+                    labelEl.textContent = '计划生成完成';
+                    detailEl.textContent = '';
+                    planSSE.close();
+                    // Fetch final job data and render
+                    fetch(`/api/jobs/${jobId}`).then(r => r.json()).then(j => {
+                      STATIONS = j.plan?.stations || [];
+                      STATIONS.forEach(s => { stationState[s.id] = { status: 'pending', issues: 0 }; });
+                      setTimeout(() => renderPlanStations(STATIONS, j.plan?.fallback === true, j.plan?.fallback_reason), 400);
+                    });
+                  } else if (ev.type === 'failed') {
+                    planDone = true;
+                    clearInterval(autoTimer);
+                    barEl.style.background = '#e74c3c';
+                    labelEl.textContent = '计划生成失败';
+                    detailEl.textContent = ev.error || '';
+                    planSSE.close();
+                  }
+                } catch (_) {}
+              };
+            } catch (_) {}
+
+            // Fallback poll in case SSE misses the event
             const pollId = setInterval(async () => {
+              if (planDone) { clearInterval(pollId); return; }
               try {
                 const r = await fetch(`/api/jobs/${jobId}`);
                 const j = await r.json();
                 if (!j.plan?.generating) {
+                  planDone = true;
                   clearInterval(pollId);
+                  clearInterval(autoTimer);
+                  if (planSSE) planSSE.close();
+                  setPlanProgress(100);
+                  labelEl.textContent = '计划生成完成';
                   STATIONS = j.plan?.stations || [];
                   STATIONS.forEach(s => { stationState[s.id] = { status: 'pending', issues: 0 }; });
-                  renderPlanStations(STATIONS, j.plan?.fallback === true, j.plan?.fallback_reason);
+                  setTimeout(() => renderPlanStations(STATIONS, j.plan?.fallback === true, j.plan?.fallback_reason), 400);
                 }
               } catch (_) {}
-            }, 2000);
+            }, 3000);
           } else {
             // Plan already generated — show stations
             STATIONS = job.plan?.stations || [];
