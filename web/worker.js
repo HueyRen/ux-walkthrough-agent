@@ -227,6 +227,8 @@ async function runJob(jobId, projectRoot, abortControllers) {
     const launchOpts = {
       headless: false,
       channel: 'chrome',
+      // Prevent Playwright from adding --enable-automation (Cloudflare detects it)
+      ignoreDefaultArgs: ['--enable-automation'],
       args: [
         '--disable-sync',
         '--disable-background-networking',
@@ -234,6 +236,7 @@ async function runJob(jobId, projectRoot, abortControllers) {
         '--disable-extensions',
         '--no-first-run',
         '--disable-blink-features=AutomationControlled',
+        '--disable-infobars',
       ],
     };
     if (proxyUrl) {
@@ -496,11 +499,11 @@ async function generateReport(jobId, projectRoot) {
   const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   let html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UX Walkthrough Report — ${escHtml(job.url)}</title>
+  <title>UX 体验走查报告 — ${escHtml(job.url)}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 960px; margin: 0 auto; padding: 2rem; background: #fafafa; }
@@ -530,6 +533,12 @@ async function generateReport(jobId, projectRoot) {
     .issue p { font-size: 0.875rem; color: #444; margin-top: 0.25rem; }
     .issue-meta { font-size: 0.75rem; color: #888; margin-top: 0.5rem; display: flex; gap: 1rem; flex-wrap: wrap; }
     .issue-meta .consensus { font-weight: 600; }
+    .issue-screenshots { display: flex; gap: 8px; margin-top: 0.75rem; flex-wrap: wrap; }
+    .issue-screenshots img { max-width: 280px; max-height: 180px; border: 1px solid #e5e5e5; border-radius: 6px; cursor: pointer; transition: transform 0.15s; object-fit: cover; }
+    .issue-screenshots img:hover { transform: scale(1.03); box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+    .screenshot-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999; align-items: center; justify-content: center; cursor: zoom-out; }
+    .screenshot-overlay.visible { display: flex; }
+    .screenshot-overlay img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
     .suggestion { font-size: 0.825rem; color: #2563eb; margin-top: 0.5rem; padding: 0.5rem; background: #eff6ff; border-radius: 4px; }
     .raw-evidence { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed #e5e5e5; display: none; }
     .raw-evidence.visible { display: block; }
@@ -551,14 +560,14 @@ async function generateReport(jobId, projectRoot) {
   </style>
 </head>
 <body>
-  <h1>UX Walkthrough Report</h1>
+  <h1>UX 体验走查报告</h1>
   <div class="meta">${escHtml(job.url)} &mdash; ${new Date().toLocaleDateString()} &mdash; ${Array.isArray(job.personas) ? job.personas.join(', ') : ''}</div>`;
 
   // Fallback warning banner (if plan was a fallback)
   if (plan.fallback) {
     html += `
   <div style="background:#fff8e1;border:1px solid #f9a825;border-radius:8px;padding:12px 16px;margin-bottom:1.5rem;font-size:0.875rem;color:#6d4c00;line-height:1.5;">
-    <strong>Note:</strong> This walkthrough used a default template plan. Dynamic plan generation failed${plan.fallback_reason ? ': ' + escHtml(plan.fallback_reason) : ''}. Results may not be optimally tailored to the target site.
+    <strong>注意：</strong> 本次走查使用了默认模板计划。动态计划生成失败${plan.fallback_reason ? '：' + escHtml(plan.fallback_reason) : ''}，结果可能未针对目标网站做最优适配。
   </div>`;
   }
 
@@ -566,7 +575,7 @@ async function generateReport(jobId, projectRoot) {
   if (summary) {
     html += `
   <div class="exec-summary">
-    <h2>Executive Summary</h2>
+    <h2>执行摘要</h2>
     <p>${escHtml(summary)}</p>
   </div>`;
   }
@@ -575,7 +584,7 @@ async function generateReport(jobId, projectRoot) {
   if (journeyInsights.length > 0) {
     html += `
   <div class="journey-insights">
-    <h2>Journey-Level Patterns</h2>
+    <h2>用户旅程洞察</h2>
     <ul>`;
     for (const insight of journeyInsights) {
       html += `\n      <li>${escHtml(insight)}</li>`;
@@ -588,19 +597,19 @@ async function generateReport(jobId, projectRoot) {
   // Stats bar
   html += `
   <div class="stats">
-    <div class="stat"><div class="num">${sorted.length}</div><div class="label">${hasMerged ? 'Merged Issues' : 'Issues'}</div></div>
-    <div class="stat"><div class="num" style="color:${severityColor.P0}">${sevCounts.P0}</div><div class="label">P0 Blockers</div></div>
-    <div class="stat"><div class="num" style="color:${severityColor.P1}">${sevCounts.P1}</div><div class="label">P1 Severe</div></div>
-    <div class="stat"><div class="num">${raw.length}</div><div class="label">Raw Findings</div></div>
-    <div class="stat"><div class="num">${Array.isArray(job.personas) ? job.personas.length : 1}</div><div class="label">Personas</div></div>
+    <div class="stat"><div class="num">${sorted.length}</div><div class="label">${hasMerged ? '合并问题' : '问题总数'}</div></div>
+    <div class="stat"><div class="num" style="color:${severityColor.P0}">${sevCounts.P0}</div><div class="label">P0 阻断</div></div>
+    <div class="stat"><div class="num" style="color:${severityColor.P1}">${sevCounts.P1}</div><div class="label">P1 严重</div></div>
+    <div class="stat"><div class="num">${raw.length}</div><div class="label">原始发现</div></div>
+    <div class="stat"><div class="num">${Array.isArray(job.personas) ? job.personas.length : 1}</div><div class="label">角色数</div></div>
   </div>`;
 
   // View toggle (only show if we have merged findings)
   if (hasMerged) {
     html += `
   <div class="view-toggle">
-    <button class="view-btn active" onclick="switchView('merged')">Merged View</button>
-    <button class="view-btn" onclick="switchView('persona')">Per-Persona View</button>
+    <button class="view-btn active" onclick="switchView('merged')">合并视图</button>
+    <button class="view-btn" onclick="switchView('persona')">按角色查看</button>
   </div>`;
   }
 
@@ -631,20 +640,38 @@ async function generateReport(jobId, projectRoot) {
       html += `\n      <div class="suggestion">${escHtml(f.suggestion)}</div>`;
     }
 
+    // Screenshots — from original findings for merged, or direct for raw
+    const screenshotUrls = [];
+    if (hasMerged && Array.isArray(f.original_finding_ids)) {
+      for (const rawId of f.original_finding_ids) {
+        const rf = rawById[rawId];
+        if (rf?.screenshot_url) screenshotUrls.push(rf.screenshot_url);
+      }
+    } else if (f.screenshot_url) {
+      screenshotUrls.push(f.screenshot_url);
+    }
+    if (screenshotUrls.length > 0) {
+      html += `\n      <div class="issue-screenshots">`;
+      for (const url of screenshotUrls) {
+        html += `\n        <img src="${escHtml(url)}" alt="screenshot" loading="lazy" onclick="openScreenshot(this.src)">`;
+      }
+      html += `\n      </div>`;
+    }
+
     html += `
       <div class="issue-meta">
         <span class="consensus">${escHtml(consensus)}</span>
         <span>${escHtml(personasAffected)}</span>
         <span>${escHtml(f.classification || '')}</span>`;
     if (f.merge_reason) {
-      html += `\n        <span>Merge: ${escHtml(f.merge_reason)}</span>`;
+      html += `\n        <span>合并原因: ${escHtml(f.merge_reason)}</span>`;
     }
     html += `
       </div>`;
 
     // Per-persona raw evidence (collapsed)
     if (hasMerged && Array.isArray(f.original_finding_ids) && f.original_finding_ids.length > 0) {
-      html += `\n      <button class="toggle-evidence" onclick="toggleEvidence(this)">Show per-persona evidence (${f.original_finding_ids.length})</button>`;
+      html += `\n      <button class="toggle-evidence" onclick="toggleEvidence(this)">展开各角色证据 (${f.original_finding_ids.length})</button>`;
       html += `\n      <div class="raw-evidence">`;
       for (const rawId of f.original_finding_ids) {
         const rf = rawById[rawId];
@@ -690,7 +717,10 @@ async function generateReport(jobId, projectRoot) {
             <span class="severity" style="background:${color}">${escHtml(issue.severity)}</span>
             <h3>${escHtml(issue.id)}: ${escHtml(rawData.title || issue.description?.slice(0, 60) || '')}</h3>
           </div>
-          <p>${escHtml(issue.description || '')}</p>
+          <p>${escHtml(issue.description || '')}</p>${issue.screenshot_url ? `
+          <div class="issue-screenshots">
+            <img src="${escHtml(issue.screenshot_url)}" alt="screenshot" loading="lazy" onclick="openScreenshot(this.src)">
+          </div>` : ''}
           <div class="issue-meta">
             <span>${escHtml(rawData.classification || '')}</span>
           </div>
@@ -709,7 +739,7 @@ async function generateReport(jobId, projectRoot) {
   if (synthesisWarnings.length > 0) {
     html += `
   <div class="warnings">
-    <h3>Synthesis Warnings</h3>
+    <h3>综合分析提示</h3>
     <ul>`;
     for (const w of synthesisWarnings) {
       html += `\n      <li>${escHtml(w)}</li>`;
@@ -735,18 +765,28 @@ async function generateReport(jobId, projectRoot) {
         btns[1].classList.add('active');
       }
     }
+    function openScreenshot(src) {
+      var ov = document.getElementById('screenshot-overlay');
+      ov.querySelector('img').src = src;
+      ov.classList.add('visible');
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+      var ov = document.getElementById('screenshot-overlay');
+      if (ov) ov.addEventListener('click', function() { ov.classList.remove('visible'); });
+    });
     function toggleEvidence(btn) {
       var ev = btn.nextElementSibling;
       if (ev.classList.contains('visible')) {
         ev.classList.remove('visible');
-        btn.textContent = btn.textContent.replace('Hide', 'Show');
+        btn.textContent = btn.textContent.replace('收起', '展开');
       } else {
         ev.classList.add('visible');
-        btn.textContent = btn.textContent.replace('Show', 'Hide');
+        btn.textContent = btn.textContent.replace('展开', '收起');
       }
     }
   </script>`;
 
+  html += `\n  <div id="screenshot-overlay" class="screenshot-overlay"><img src="" alt="full screenshot"></div>`;
   html += `\n</body>\n</html>\n`;
 
   // Save report to filesystem

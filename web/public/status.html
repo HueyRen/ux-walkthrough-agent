@@ -1583,10 +1583,13 @@
                 try {
                   const ev = JSON.parse(e.data);
                   if (ev.type === 'plan-progress') {
-                    // Real progress: map station count to percentage (assume ~7 stations)
+                    // Always update detail text with real station info
+                    const detail = `已发现 ${ev.stationsFound} 个站点` + (ev.latestStation ? ` · ${ev.latestStation}` : '');
+                    detailEl.textContent = detail;
+                    // Advance bar if real progress exceeds auto-advance
                     const realPct = Math.min(15 + (ev.stationsFound / 7) * 75, 92);
                     if (realPct > planProgress) {
-                      setPlanProgress(realPct, `已发现 ${ev.stationsFound} 个站点` + (ev.latestStation ? ` · ${ev.latestStation}` : ''));
+                      setPlanProgress(realPct);
                     }
                   } else if (ev.type === 'plan-ready') {
                     planDone = true;
